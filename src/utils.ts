@@ -64,10 +64,87 @@ export function getProductImage(item: InventoryItem): string {
 }
 
 // Initial Mock Inventory
-export const initialInventory: InventoryItem[] = [];
+export const initialInventory: InventoryItem[] = [
+  {
+    id: "BT-ID-001",
+    kodeBarang: "BT-KMH-001",
+    namaBarang: "Tenda Dome Consina Magnum 4",
+    merk: "Consina",
+    seri: "Magnum 4",
+    ukuran: "Kapasitas 4 Orang",
+    berat: "3.2 kg",
+    kuantitas: 8,
+    hargaPembelian: 850000,
+    statusBarang: "Ready",
+    kondisiBarang: "Baik",
+    penanganan: "Tidak",
+    tempatPenyimpanan: "Rak Barat A",
+    tanggalPembelian: "2025-10-15",
+    fotoBarang: "",
+    kategoriBarang: "Kemah",
+    keterangan: "Perlengkapan andalan untuk trip Merbabu.",
+    hargaSewaBarang: 35000
+  },
+  {
+    id: "BT-ID-002",
+    kodeBarang: "BT-ELK-002",
+    namaBarang: "HT Baofeng UV-5R Dual Band",
+    merk: "Baofeng",
+    seri: "UV-5R",
+    ukuran: "- ",
+    berat: "250 g",
+    kuantitas: 12,
+    hargaPembelian: 320000,
+    statusBarang: "Pemakaian",
+    kondisiBarang: "Baik",
+    penanganan: "Tidak",
+    tempatPenyimpanan: "Lemari Tengah",
+    tanggalPembelian: "2025-05-20",
+    fotoBarang: "",
+    kategoriBarang: "Elektronik",
+    keterangan: "Komunikasi logistik kru.",
+    hargaSewaBarang: 15000
+  },
+  {
+    id: "BT-ID-003",
+    kodeBarang: "BT-TRK-003",
+    namaBarang: "Carrier Eiger Equator 65L",
+    merk: "Eiger",
+    seri: "Equator 65",
+    ukuran: "65 Liter",
+    berat: "1.8 kg",
+    kuantitas: 4,
+    hargaPembelian: 1600000,
+    statusBarang: "Perbaikan",
+    kondisiBarang: "Rusak Ringan",
+    penanganan: "Perbaikan",
+    tempatPenyimpanan: "Rak Gantung",
+    tanggalPembelian: "2026-01-10",
+    fotoBarang: "",
+    kategoriBarang: "Trekking",
+    keterangan: "Resleting utama sobek.",
+    hargaSewaBarang: 25000
+  }
+];
 
 // Initial Mock Logs
-export const initialLogs: ActivityLog[] = [];
+export const initialLogs: ActivityLog[] = [
+  {
+    id: "LOG-001",
+    tanggal: "2026-05-22 09:30",
+    jenisAktivitas: "Pemakaian Trip",
+    idBarang: "BT-ID-002",
+    namaBarang: "HT Baofeng UV-5R Dual Band",
+    jumlah: 4,
+    pemakai: "Wayan S.",
+    divisi: "Kru Outdoor",
+    keterangan: "Logistik komunikasi lapangan Merbabu.",
+    kondisiKeluar: "Baik",
+    kondisiKembali: "Baik",
+    statusPengembalian: "Belum Kembali",
+    pic: "Rizki S."
+  }
+];
 
 // Default App Config
 export const defaultAppConfig: AppConfig = {

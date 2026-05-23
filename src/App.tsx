@@ -53,11 +53,14 @@ export default function App() {
     const unsubscribeInv = onSnapshot(collection(db, 'inventory'), (snapshot) => {
       if (snapshot.empty) {
         // Automatically seed with default sample inventory on first boot
-        initialInventory.forEach((item) => {
-          setDoc(doc(db, 'inventory', item.id), item).catch((err) => {
-            console.error('Error seeding inventory document: ', err);
+        setInventory(initialInventory);
+        if (initialInventory.length > 0) {
+          initialInventory.forEach((item) => {
+            setDoc(doc(db, 'inventory', item.id), item).catch((err) => {
+              console.error('Error seeding inventory document: ', err);
+            });
           });
-        });
+        }
       } else {
         const data: InventoryItem[] = [];
         snapshot.forEach((d) => {
@@ -79,11 +82,14 @@ export default function App() {
     const unsubscribeLogs = onSnapshot(collection(db, 'logs'), (snapshot) => {
       if (snapshot.empty) {
         // Automatically seed default activity logs on first boot
-        initialLogs.forEach((log) => {
-          setDoc(doc(db, 'logs', log.id), log).catch((err) => {
-            console.error('Error seeding logs document: ', err);
+        setLogs(initialLogs);
+        if (initialLogs.length > 0) {
+          initialLogs.forEach((log) => {
+            setDoc(doc(db, 'logs', log.id), log).catch((err) => {
+              console.error('Error seeding logs document: ', err);
+            });
           });
-        });
+        }
       } else {
         const data: ActivityLog[] = [];
         snapshot.forEach((d) => {
