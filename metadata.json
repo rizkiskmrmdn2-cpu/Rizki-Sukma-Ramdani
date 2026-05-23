@@ -1,0 +1,6 @@
+{
+  "name": "Operasional BARENGIN TRIP",
+  "description": "Sistem Manajemen Inventaris dan Operasional untuk Operator Pendakian BARENGIN TRIP. Dilengkapi dengan manajemen pemakaian trip, manifest ekspedisi, dan sinkronisasi Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
