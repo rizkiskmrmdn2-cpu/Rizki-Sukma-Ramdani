@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Helper function for standard validation
     function isValidId(id) {
-      return id is string && id.size() <= 128;
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     // Default deny catch-all
@@ -13,27 +13,37 @@ service cloud.firestore {
 
     // Inventory items collection
     match /inventory/{id} {
-      allow read, write: if isValidId(id);
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id);
     }
 
     // Logs collection
     match /logs/{id} {
-      allow read, write: if isValidId(id);
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id);
     }
 
     // App configurations collection
     match /config/{id} {
-      allow read, write: if isValidId(id);
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id);
     }
 
     // Procurements collection
     match /procurements/{id} {
-      allow read, write: if isValidId(id);
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id);
     }
 
     // Expedition steps & trips collection
     match /expedition_trips/{id} {
-      allow read, write: if isValidId(id);
+      allow get: if isValidId(id);
+      allow list: if true;
+      allow create, update, delete: if isValidId(id);
     }
   }
 }
