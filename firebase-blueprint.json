@@ -1,0 +1,128 @@
+{
+  "entities": {
+    "InventoryItem": {
+      "title": "InventoryItem",
+      "description": "Item data stored in the basecamp warehouse database",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "kodeBarang": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "merk": { "type": "string" },
+        "seri": { "type": "string" },
+        "ukuran": { "type": "string" },
+        "berat": { "type": "string" },
+        "kuantitas": { "type": "number" },
+        "hargaPembelian": { "type": "number" },
+        "statusBarang": { "type": "string", "enum": ["Ready", "Pemakaian", "Perbaikan", "Perawatan"] },
+        "kondisiBarang": { "type": "string", "enum": ["Baru", "Baik", "Rusak Ringan", "Tidak Dapat Dipakai"] },
+        "penanganan": { "type": "string", "enum": ["Tidak", "Perbaikan", "Perawatan"] },
+        "tempatPenyimpanan": { "type": "string" },
+        "tanggalPembelian": { "type": "string" },
+        "fotoBarang": { "type": "string" },
+        "kategoriBarang": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "hargaSewaBarang": { "type": "number" }
+      },
+      "required": ["id", "kodeBarang", "namaBarang", "kuantitas", "statusBarang", "kondisiBarang"]
+    },
+    "ActivityLog": {
+      "title": "ActivityLog",
+      "description": "Log of items entering or leaving basecamp warehouse",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggal": { "type": "string" },
+        "jenisAktivitas": { "type": "string" },
+        "idBarang": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "pemakai": { "type": "string" },
+        "divisi": { "type": "string" },
+        "keterangan": { "type": "string" },
+        "kondisiKeluar": { "type": "string" },
+        "kondisiKembali": { "type": "string" },
+        "statusPengembalian": { "type": "string" },
+        "pic": { "type": "string" }
+      },
+      "required": ["id", "tanggal", "jenisAktivitas", "idBarang", "namaBarang", "jumlah", "statusPengembalian"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Global application / organization settings",
+      "type": "object",
+      "properties": {
+        "companyName": { "type": "string" },
+        "address": { "type": "string" },
+        "contact": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "picName": { "type": "string" },
+        "directorName": { "type": "string" },
+        "spreadsheetUrl": { "type": "string" },
+        "driveFolderUrl": { "type": "string" }
+      },
+      "required": ["companyName", "directorName"]
+    },
+    "ProcurementItem": {
+      "title": "ProcurementItem",
+      "description": "Procurement item / purchase plan item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "kategori": { "type": "string" },
+        "tujuan": { "type": "string" },
+        "jumlah": { "type": "number" },
+        "estimasiHarga": { "type": "number" },
+        "prioritas": { "type": "string" },
+        "status": { "type": "string" },
+        "vendor": { "type": "string" },
+        "catatan": { "type": "string" },
+        "tanggalPengajuan": { "type": "string" }
+      },
+      "required": ["id", "namaBarang", "jumlah", "estimasiHarga", "prioritas", "status"]
+    },
+    "ExpeditionTrip": {
+      "title": "ExpeditionTrip",
+      "description": "Adventure/open-trip logistical plan and crew assignments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "jenisTrip": { "type": "string" },
+        "nomorTrip": { "type": "string" },
+        "namaDestinasi": { "type": "string" },
+        "jalurPendakian": { "type": "string" },
+        "tanggalMulai": { "type": "string" },
+        "tanggalSelesai": { "type": "string" },
+        "status": { "type": "string" },
+        "crew": { "type": "array" },
+        "plannedItems": { "type": "array" },
+        "distributions": { "type": "array" },
+        "damageReport": { "type": "array" }
+      },
+      "required": ["id", "jenisTrip", "namaDestinasi", "tanggalMulai", "tanggalSelesai", "status"]
+    }
+  },
+  "firestore": {
+    "/inventory/{id}": {
+      "schema": { "$ref": "#/entities/InventoryItem" },
+      "description": "Basecamp inventory products collection"
+    },
+    "/logs/{id}": {
+      "schema": { "$ref": "#/entities/ActivityLog" },
+      "description": "Warehouse mutation activities collection"
+    },
+    "/config/{id}": {
+      "schema": { "$ref": "#/entities/AppConfig" },
+      "description": "Singleton-like config or instance configs collection"
+    },
+    "/procurements/{id}": {
+      "schema": { "$ref": "#/entities/ProcurementItem" },
+      "description": "Asset procurement planning collection"
+    },
+    "/expedition_trips/{id}": {
+      "schema": { "$ref": "#/entities/ExpeditionTrip" },
+      "description": "Expedition plans and logistics logistics assignment collection"
+    }
+  }
+}

@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { InventoryItem } from '../types';
 import { formatRupiah } from '../utils';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export interface ProcurementItem {
   id: string;
@@ -43,19 +45,8 @@ interface Props {
 export default function PengadaanAset({ inventory, onAddInventarisItem, userRole }: Props) {
   const baseId = useId();
 
-  // Local state for Procurement
-  const [items, setItems] = useState<ProcurementItem[]>(() => {
-    const saved = localStorage.getItem('bt_procurements');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing procurements:', e);
-      }
-    }
-    // Set empty by default so user starts from scratch
-    return [] as ProcurementItem[];
-  });
+  // Local state for Procurement loaded and synced live via Firestore
+  const [items, setItems] = useState<ProcurementItem[]>([]);
 
   const [filterKategori, setFilterKategori] = useState<string>('Semua');
   const [filterPrioritas, setFilterPrioritas] = useState<string>('Semua');
@@ -74,10 +65,22 @@ export default function PengadaanAset({ inventory, onAddInventarisItem, userRole
     catatan: ''
   });
 
-  // Save to localStorage on update
+  // Firestore real-time synchronization
   useEffect(() => {
-    localStorage.setItem('bt_procurements', JSON.stringify(items));
-  }, [items]);
+    const unsubscribe = onSnapshot(collection(db, 'procurements'), (snapshot) => {
+      const data: ProcurementItem[] = [];
+      snapshot.forEach((d) => {
+        data.push(d.data() as ProcurementItem);
+      });
+      // Sort procurements newest first (PRC- timestamp or Date.now)
+      data.sort((a, b) => b.id.localeCompare(a.id));
+      setItems(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'procurements');
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Compute stats
   const stats = useMemo(() => {
@@ -173,7 +176,7 @@ export default function PengadaanAset({ inventory, onAddInventarisItem, userRole
   }, [inventory]);
 
   // Handle Form Submits
-  const handleCreateProcurement = (e: React.FormEvent) => {
+  const handleCreateProcurement = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.namaBarang || formData.estimasiHarga <= 0) {
       alert('Isi nama barang dan harga estimasi secara valid!');
@@ -194,22 +197,26 @@ export default function PengadaanAset({ inventory, onAddInventarisItem, userRole
       tanggalPengajuan: new Date().toISOString().split('T')[0]
     };
 
-    setItems((prev) => [newItem, ...prev]);
-    setShowAddForm(false);
-    setFormData({
-      namaBarang: '',
-      kategori: 'Peralatan Gunung',
-      tujuan: '',
-      jumlah: 1,
-      estimasiHarga: 0,
-      prioritas: 'Sedang',
-      status: 'Menunggu Persetujuan',
-      vendor: '',
-      catatan: ''
-    });
+    try {
+      await setDoc(doc(db, 'procurements', newItem.id), newItem);
+      setShowAddForm(false);
+      setFormData({
+        namaBarang: '',
+        kategori: 'Peralatan Gunung',
+        tujuan: '',
+        jumlah: 1,
+        estimasiHarga: 0,
+        prioritas: 'Sedang',
+        status: 'Menunggu Persetujuan',
+        vendor: '',
+        catatan: ''
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `procurements/${newItem.id}`);
+    }
   };
 
-  const handleDeleteProcurement = (id: string) => {
+  const handleDeleteProcurement = async (id: string) => {
     let confirmDelete = true;
     try {
       confirmDelete = window.confirm('Apakah Anda yakin ingin menghapus perencanaan pengadaan barang ini?');
@@ -218,14 +225,20 @@ export default function PengadaanAset({ inventory, onAddInventarisItem, userRole
       confirmDelete = true;
     }
     if (confirmDelete) {
-      setItems((prev) => prev.filter((item) => item.id !== id));
+      try {
+        await deleteDoc(doc(db, 'procurements', id));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `procurements/${id}`);
+      }
     }
   };
 
-  const handleUpdateStatus = (id: string, newStatus: ProcurementItem['status']) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, status: newStatus } : it))
-    );
+  const handleUpdateStatus = async (id: string, newStatus: ProcurementItem['status']) => {
+    try {
+      await updateDoc(doc(db, 'procurements', id), { status: newStatus });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `procurements/${id}`);
+    }
   };
 
   // Filter items

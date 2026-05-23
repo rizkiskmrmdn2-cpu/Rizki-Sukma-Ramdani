@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function for standard validation
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Inventory items collection
+    match /inventory/{id} {
+      allow read, write: if isValidId(id);
+    }
+
+    // Logs collection
+    match /logs/{id} {
+      allow read, write: if isValidId(id);
+    }
+
+    // App configurations collection
+    match /config/{id} {
+      allow read, write: if isValidId(id);
+    }
+
+    // Procurements collection
+    match /procurements/{id} {
+      allow read, write: if isValidId(id);
+    }
+
+    // Expedition steps & trips collection
+    match /expedition_trips/{id} {
+      allow read, write: if isValidId(id);
+    }
+  }
+}

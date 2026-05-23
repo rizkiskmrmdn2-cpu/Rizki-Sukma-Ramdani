@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { InventoryItem, ActivityLog, AppConfig, ActiveSession } from './types';
 import { initialInventory, initialLogs, defaultAppConfig } from './utils';
+import { db, handleFirestoreError, OperationType } from './firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 // Import Modular Components
 import Sidebar from './components/Sidebar';
@@ -45,58 +47,84 @@ export default function App() {
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // Load from localStorage on initialization
+  // Load and listen to Firestore real-time snapshots
   useEffect(() => {
-    try {
-      const storedInv = localStorage.getItem('bt_inventory');
-      const storedLogs = localStorage.getItem('bt_logs');
-      const storedConfig = localStorage.getItem('bt_config');
-      const storedSession = localStorage.getItem('bt_session');
-
-      if (storedInv) setInventory(JSON.parse(storedInv));
-      else {
-        setInventory(initialInventory);
-        localStorage.setItem('bt_inventory', JSON.stringify(initialInventory));
-      }
-
-      if (storedLogs) setLogs(JSON.parse(storedLogs));
-      else {
-        setLogs(initialLogs);
-        localStorage.setItem('bt_logs', JSON.stringify(initialLogs));
-      }
-
-      if (storedConfig) {
-        const parsed = JSON.parse(storedConfig);
-        let updated = false;
-        if (parsed.spreadsheetUrl === 'https://docs.google.com/spreadsheets/d/1dLkbeEVKGltlfcEY9gjECOw_R8tVqyZtKvogyQDfRIM/edit?gid=0#gid=0') {
-          parsed.spreadsheetUrl = 'https://docs.google.com/spreadsheets/d/195wX5dJP4UlJQg_zdmpPYahml4l_HlZKH6fdw3mIwIo/edit?gid=1685526565#gid=1685526565';
-          updated = true;
-        }
-        if (parsed.driveFolderUrl === 'https://drive.google.com/drive/folders/1g5COcgVXWqbGXpRyB0lLLp3bL2vyM-Tb?hl=id') {
-          parsed.driveFolderUrl = 'https://drive.google.com/drive/folders/17J7Vf49RDsJRsPCUCEITFnrxEFQ_mXOr?hl=id';
-          updated = true;
-        }
-        if (!parsed.logoUrl || parsed.logoUrl.includes('1zey39LeJHJnSpUVg1XvBDopB_kwlZkOd') || parsed.logoUrl.includes('1vNgJU2qGp8egIU2qAQk-7ooEqUz596sI') || parsed.logoUrl.includes('1NJUtWwYIiAbU5-2fPg4BorEFWEHLRj3G')) {
-          parsed.logoUrl = 'https://lh3.googleusercontent.com/d/1C-scCTu7H2eOa-ZtDhak1JcbRhTNCCIb';
-          updated = true;
-        }
-        if (!parsed.directorName) {
-          parsed.directorName = 'Dafi Al-Wahid (Direktur Utama)';
-          updated = true;
-        }
-        setConfig(parsed);
-        if (updated) {
-          localStorage.setItem('bt_config', JSON.stringify(parsed));
-        }
+    // 1. Sync inventory
+    const unsubscribeInv = onSnapshot(collection(db, 'inventory'), (snapshot) => {
+      if (snapshot.empty) {
+        // Automatically seed with default sample inventory on first boot
+        initialInventory.forEach((item) => {
+          setDoc(doc(db, 'inventory', item.id), item).catch((err) => {
+            console.error('Error seeding inventory document: ', err);
+          });
+        });
       } else {
-        setConfig(defaultAppConfig);
-        localStorage.setItem('bt_config', JSON.stringify(defaultAppConfig));
+        const data: InventoryItem[] = [];
+        snapshot.forEach((d) => {
+          data.push(d.data() as InventoryItem);
+        });
+        // Sort items by original ID numeric value
+        data.sort((a, b) => {
+          const numA = parseInt(a.id.replace('BT-ID-', ''), 10);
+          const numB = parseInt(b.id.replace('BT-ID-', ''), 10);
+          return numA - numB;
+        });
+        setInventory(data);
       }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'inventory');
+    });
 
-      if (storedSession) setSession(JSON.parse(storedSession));
-    } catch (e) {
-      console.error('Error loading localStorage:', e);
+    // 2. Sync mutation logs
+    const unsubscribeLogs = onSnapshot(collection(db, 'logs'), (snapshot) => {
+      if (snapshot.empty) {
+        // Automatically seed default activity logs on first boot
+        initialLogs.forEach((log) => {
+          setDoc(doc(db, 'logs', log.id), log).catch((err) => {
+            console.error('Error seeding logs document: ', err);
+          });
+        });
+      } else {
+        const data: ActivityLog[] = [];
+        snapshot.forEach((d) => {
+          data.push(d.data() as ActivityLog);
+        });
+        // Sort newest logs first
+        data.sort((a, b) => b.tanggal.localeCompare(a.tanggal) || b.id.localeCompare(a.id));
+        setLogs(data);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'logs');
+    });
+
+    // 3. Sync singleton configuration doc
+    const unsubscribeConfig = onSnapshot(doc(db, 'config', 'settings'), (docSnap) => {
+      if (!docSnap.exists()) {
+        setDoc(doc(db, 'config', 'settings'), defaultAppConfig).catch((err) => {
+          console.error('Error seeding config: ', err);
+        });
+      } else {
+        setConfig(docSnap.data() as AppConfig);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'config/settings');
+    });
+
+    // 4. Sync browser-local user session
+    const storedSession = localStorage.getItem('bt_session');
+    if (storedSession) {
+      try {
+        setSession(JSON.parse(storedSession));
+      } catch (e) {
+        console.error('Error loading session:', e);
+      }
     }
+
+    return () => {
+      unsubscribeInv();
+      unsubscribeLogs();
+      unsubscribeConfig();
+    };
   }, []);
 
   // Show dynamic notification helper
@@ -144,48 +172,42 @@ export default function App() {
   };
 
   // 3. Database CUD Handlers
-  const handleSaveItem = (itemData: Partial<InventoryItem>) => {
-    const updatedInventory = [...inventory];
-    
-    if (itemData.id) {
-      // Edit Mode
-      const index = updatedInventory.findIndex((i) => i.id === itemData.id);
-      if (index !== -1) {
-        updatedInventory[index] = { ...updatedInventory[index], ...itemData } as InventoryItem;
-        showToast(`Barang "${itemData.namaBarang}" berhasil diperbarui!`);
-      }
-    } else {
+  const handleSaveItem = async (itemData: Partial<InventoryItem>) => {
+    let itemId = itemData.id;
+    if (!itemId) {
       // Add Mode
-      // Cari ID maksimal untuk auto increment
       let maxNum = 0;
-      updatedInventory.forEach((item) => {
+      inventory.forEach((item) => {
         const num = parseInt(item.id.replace('BT-ID-', ''), 10);
         if (!isNaN(num) && num > maxNum) maxNum = num;
       });
-
       const nextIdNum = maxNum + 1;
-      const newItem: InventoryItem = {
-        ...itemData,
-        id: `BT-ID-${String(nextIdNum).padStart(3, '0')}`
-      } as InventoryItem;
-
-      updatedInventory.push(newItem);
-      showToast(`Barang baru "${newItem.namaBarang}" berhasil ditambahkan ke database!`);
+      itemId = `BT-ID-${String(nextIdNum).padStart(3, '0')}`;
     }
 
-    setInventory(updatedInventory);
-    localStorage.setItem('bt_inventory', JSON.stringify(updatedInventory));
+    const newItem = {
+      ...itemData,
+      id: itemId
+    } as InventoryItem;
+
+    try {
+      await setDoc(doc(db, 'inventory', itemId), newItem);
+      showToast(`Barang "${newItem.namaBarang}" berhasil disimpan!`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `inventory/${itemId}`);
+    }
   };
 
-  const handleDeleteItem = (id: string) => {
-    const filtered = inventory.filter((item) => item.id !== id);
-    setInventory(filtered);
-    localStorage.setItem('bt_inventory', JSON.stringify(filtered));
-    showToast(`Barang dengan ID ${id} berhasil dihapus dari database.`, 'info');
+  const handleDeleteItem = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'inventory', id));
+      showToast(`Barang dengan ID ${id} berhasil dihapus dari database.`, 'info');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `inventory/${id}`);
+    }
   };
 
-  const handleAddLog = (logData: Partial<ActivityLog>) => {
-    // Generate Log ID
+  const handleAddLog = async (logData: Partial<ActivityLog>) => {
     let maxIdNum = 0;
     logs.forEach((log) => {
       const num = parseInt(log.id.replace('LOG-', ''), 10);
@@ -201,100 +223,110 @@ export default function App() {
       tanggal: dateFormatted
     } as ActivityLog;
 
-    const updatedLogs = [newLog, ...logs];
-    setLogs(updatedLogs);
-    localStorage.setItem('bt_logs', JSON.stringify(updatedLogs));
-
     // Update stok barang di database
-    const updatedInventory = inventory.map((item) => {
-      if (item.id === logData.idBarang) {
-        const qtyMutasi = logData.jumlah || 1;
-        let newQty = item.kuantitas;
-        let newStatus = item.statusBarang;
+    const itemToUpdate = inventory.find(item => item.id === logData.idBarang);
+    if (itemToUpdate) {
+      const qtyMutasi = logData.jumlah || 1;
+      let newQty = itemToUpdate.kuantitas;
+      let newStatus = itemToUpdate.statusBarang;
 
-        // Jika langsung kembali, stok tidak berubah jangka panjang
-        if (logData.statusPengembalian === 'Belum Kembali') {
-          if (['Pemakaian Trip', 'Penyewaan Barang', 'Pemakaian Pribadi Internal'].includes(logData.jenisAktivitas || '')) {
-            newQty = Math.max(0, item.kuantitas - qtyMutasi);
-            newStatus = 'Pemakaian';
-          } else if (logData.jenisAktivitas === 'Dijual') {
-            newQty = Math.max(0, item.kuantitas - qtyMutasi);
-            newStatus = 'Ready';
-          } else if (logData.jenisAktivitas === 'Reparasi') {
-            newStatus = 'Perbaikan';
-          } else if (logData.jenisAktivitas === 'Perawatan') {
-            newStatus = 'Perawatan';
-          }
+      if (logData.statusPengembalian === 'Belum Kembali') {
+        if (['Pemakaian Trip', 'Penyewaan Barang', 'Pemakaian Pribadi Internal'].includes(logData.jenisAktivitas || '')) {
+          newQty = Math.max(0, itemToUpdate.kuantitas - qtyMutasi);
+          newStatus = 'Pemakaian';
+        } else if (logData.jenisAktivitas === 'Dijual') {
+          newQty = Math.max(0, itemToUpdate.kuantitas - qtyMutasi);
+          newStatus = 'Ready';
+        } else if (logData.jenisAktivitas === 'Reparasi') {
+          newStatus = 'Perbaikan';
+        } else if (logData.jenisAktivitas === 'Perawatan') {
+          newStatus = 'Perawatan';
         }
+      }
 
-        return {
-          ...item,
+      try {
+        await setDoc(doc(db, 'inventory', itemToUpdate.id), {
+          ...itemToUpdate,
           kuantitas: newQty,
           statusBarang: newStatus
-        };
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `inventory/${itemToUpdate.id}`);
       }
-      return item;
-    });
+    }
 
-    setInventory(updatedInventory);
-    localStorage.setItem('bt_inventory', JSON.stringify(updatedInventory));
-    showToast(`Aktivitas ${logData.jenisAktivitas} berhasil dicatat dan stok disinkronisasi.`);
+    try {
+      await setDoc(doc(db, 'logs', nextLogId), newLog);
+      showToast(`Aktivitas ${logData.jenisAktivitas} berhasil dicatat dan stok disinkronisasi.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `logs/${nextLogId}`);
+    }
   };
 
-  const handleReturnItem = (logId: string, kondisiKembali: 'Baru' | 'Baik' | 'Rusak Ringan' | 'Tidak Dapat Dipakai') => {
-    // Cari log yang bersangkutan
-    const logIndex = logs.findIndex((log) => log.id === logId);
-    if (logIndex === -1) return;
-
-    const logToReturn = logs[logIndex];
-    if (logToReturn.statusPengembalian === 'Sudah Kembali') return;
+  const handleReturnItem = async (logId: string, kondisiKembali: 'Baru' | 'Baik' | 'Rusak Ringan' | 'Tidak Dapat Dipakai') => {
+    const logToReturn = logs.find((log) => log.id === logId);
+    if (!logToReturn || logToReturn.statusPengembalian === 'Sudah Kembali') return;
 
     // Perbarui status log
-    const updatedLogs = [...logs];
-    updatedLogs[logIndex] = {
+    const updatedLog = {
       ...logToReturn,
-      statusPengembalian: 'Sudah Kembali',
+      statusPengembalian: 'Sudah Kembali' as const,
       kondisiKembali,
       tanggal: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
-    setLogs(updatedLogs);
-    localStorage.setItem('bt_logs', JSON.stringify(updatedLogs));
 
     // Kembalikan stok item barang
-    const updatedInventory = inventory.map((item) => {
-      if (item.id === logToReturn.idBarang) {
-        return {
-          ...item,
-          kuantitas: item.kuantitas + logToReturn.jumlah,
+    const itemToUpdate = inventory.find(item => item.id === logToReturn.idBarang);
+    if (itemToUpdate) {
+      try {
+        await setDoc(doc(db, 'inventory', itemToUpdate.id), {
+          ...itemToUpdate,
+          kuantitas: itemToUpdate.kuantitas + logToReturn.jumlah,
           statusBarang: 'Ready' as const,
           kondisiBarang: kondisiKembali
-        };
+        });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.WRITE, `inventory/${itemToUpdate.id}`);
       }
-      return item;
-    });
+    }
 
-    setInventory(updatedInventory);
-    localStorage.setItem('bt_inventory', JSON.stringify(updatedInventory));
-    showToast(`Barang "${logToReturn.namaBarang}" sebanyak ${logToReturn.jumlah} pcs berhasil dikembalikan ke Basecamp.`, 'success');
+    try {
+      await setDoc(doc(db, 'logs', logId), updatedLog);
+      showToast(`Barang "${logToReturn.namaBarang}" sebanyak ${logToReturn.jumlah} pcs berhasil dikembalikan ke Basecamp.`, 'success');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `logs/${logId}`);
+    }
   };
 
-  const handleSaveConfig = (newConfig: AppConfig) => {
-    setConfig(newConfig);
-    localStorage.setItem('bt_config', JSON.stringify(newConfig));
-    showToast('Konfigurasi instansi berhasil disimpan.');
+  const handleSaveConfig = async (newConfig: AppConfig) => {
+    try {
+      await setDoc(doc(db, 'config', 'settings'), newConfig);
+      showToast('Konfigurasi instansi berhasil disimpan.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'config/settings');
+    }
   };
 
-  const handleResetAllData = () => {
-    setInventory([]);
-    setLogs([]);
-    localStorage.setItem('bt_inventory', JSON.stringify([]));
-    localStorage.setItem('bt_logs', JSON.stringify([]));
-    localStorage.setItem('bt_procurements', JSON.stringify([]));
-    localStorage.setItem('bt_expedition_trips', JSON.stringify([]));
-    showToast('Semua data contoh berhasil dihapus. Sistem sekarang bersih 100% dari nol!', 'success');
-    setTimeout(() => {
-       window.location.reload();
-    }, 1000);
+  const handleResetAllData = async () => {
+    try {
+      // Delete all inventories
+      for (const item of inventory) {
+        await deleteDoc(doc(db, 'inventory', item.id));
+      }
+      // Delete all logs
+      for (const log of logs) {
+        await deleteDoc(doc(db, 'logs', log.id));
+      }
+      // Also delete config
+      await deleteDoc(doc(db, 'config', 'settings'));
+
+      showToast('Semua data contoh berhasil dihapus. Sistem sekarang bersih 100% dari nol!', 'success');
+      setTimeout(() => {
+         window.location.reload();
+      }, 1000);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'bulk-reset');
+    }
   };
 
   // Render Login Frame jika belum login

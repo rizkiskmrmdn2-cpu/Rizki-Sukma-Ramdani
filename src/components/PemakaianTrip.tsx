@@ -29,6 +29,8 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { InventoryItem, CrewAssignment, ExpeditionTrip, ExpeditionCrew, PlannedLogisticsItem, CrewDistributionItem, AppConfig } from '../types';
+import { db, handleFirestoreError, OperationType } from '../firebase';
+import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
 
 // Import our newly created modular substeps
 import TripDashboard from './TripDashboard';
@@ -87,20 +89,8 @@ function formatTripDates(dateMulai: string, dateSelesai: string): string {
 export default function PemakaianTrip({ inventory, userRole = 'Super Admin', config }: Props) {
   const baseId = useId();
 
-  // 1. LOCAL STORAGE PERSISTENCE & INITIAL SEEDING
-  const [trips, setTrips] = useState<ExpeditionTrip[]>(() => {
-    const saved = localStorage.getItem('bt_expedition_trips');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error parsing trips from localstorage:', e);
-      }
-    }
-
-    // Default Seed is empty by default
-    return [];
-  });
+  // Firestore state
+  const [trips, setTrips] = useState<ExpeditionTrip[]>([]);
 
   const [activeTripId, setActiveTripId] = useState<string | null>(() => {
     return localStorage.getItem('bt_active_trip_id') || null;
@@ -108,10 +98,38 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
 
   const [activeStep, setActiveStep] = useState<number>(1); // 1: Status & Checklist, 2: Kru, 3: Peralatan, 4: Distribusi, 5: Manifest
 
-  // Sync state
+  // 1. Load and listen from Firestore instead of localStorage
   useEffect(() => {
-    localStorage.setItem('bt_expedition_trips', JSON.stringify(trips));
-  }, [trips]);
+    const unsubscribe = onSnapshot(collection(db, 'expedition_trips'), (snapshot) => {
+      const data: ExpeditionTrip[] = [];
+      snapshot.forEach((doc) => {
+        data.push(doc.data() as ExpeditionTrip);
+      });
+      // Sort newest trip first
+      data.sort((a, b) => b.id.localeCompare(a.id));
+      setTrips(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'expedition_trips');
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Save specific trip directly to Firestore
+  const saveTripToFirestore = async (trip: ExpeditionTrip) => {
+    try {
+      await setDoc(doc(db, 'expedition_trips', trip.id), trip);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `expedition_trips/${trip.id}`);
+    }
+  };
+
+  const deleteTripFromFirestore = async (tripId: string) => {
+    try {
+      await deleteDoc(doc(db, 'expedition_trips', tripId));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `expedition_trips/${tripId}`);
+    }
+  };
 
   useEffect(() => {
     if (activeTripId) {
@@ -127,14 +145,14 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
 
   // Handle active status update
   const handleUpdateStatus = (val: ExpeditionTrip['status']) => {
-    if (!activeTripId) return;
-    setTrips(prev => prev.map(t => t.id === activeTripId ? { ...t, status: val } : t));
+    if (!activeTrip) return;
+    saveTripToFirestore({ ...activeTrip, status: val });
   };
 
   // Handle saving return checklist
   const handleSaveDamageReport = (rep: any[]) => {
-    if (!activeTripId) return;
-    setTrips(prev => prev.map(t => t.id === activeTripId ? { ...t, damageReport: rep } : t));
+    if (!activeTrip) return;
+    saveTripToFirestore({ ...activeTrip, damageReport: rep });
   };
 
   // NEW TRIP FORM INGEST DATA
@@ -170,7 +188,7 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
       distributions: []
     };
 
-    setTrips((prev) => [newTrip, ...prev]);
+    saveTripToFirestore(newTrip);
     setActiveTripId(newTrip.id);
     setActiveStep(1); // Nav straight to step 1
   };
@@ -185,7 +203,7 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
       confirmDelete = true;
     }
     if (confirmDelete) {
-      setTrips((prev) => prev.filter((t) => t.id !== tripId));
+      deleteTripFromFirestore(tripId);
       if (activeTripId === tripId) {
         setActiveTripId(null);
       }
@@ -207,27 +225,18 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
     e.preventDefault();
     if (!activeTrip || !crewForm.namaKru) return;
 
+    let updatedCrew;
     if (editingCrewId) {
-      setTrips((prev) =>
-        prev.map((t) => {
-          if (t.id === activeTrip.id) {
-            return {
-              ...t,
-              crew: t.crew.map((c) =>
-                c.id === editingCrewId
-                  ? {
-                      ...c,
-                      namaKru: crewForm.namaKru!,
-                      role: crewForm.role as any,
-                      nomorHp: crewForm.nomorHp || '',
-                      kapasitasBebanMax: Number(crewForm.kapasitasBebanMax || 20)
-                    }
-                  : c
-              )
-            };
-          }
-          return t;
-        })
+      updatedCrew = activeTrip.crew.map((c) =>
+        c.id === editingCrewId
+          ? {
+              ...c,
+              namaKru: crewForm.namaKru!,
+              role: crewForm.role as any,
+              nomorHp: crewForm.nomorHp || '',
+              kapasitasBebanMax: Number(crewForm.kapasitasBebanMax || 20)
+            }
+          : c
       );
       setEditingCrewId(null);
     } else {
@@ -238,19 +247,10 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
         nomorHp: crewForm.nomorHp || '',
         kapasitasBebanMax: Number(crewForm.kapasitasBebanMax || 20)
       };
-
-      setTrips((prev) =>
-        prev.map((t) => {
-          if (t.id === activeTrip.id) {
-            return {
-              ...t,
-              crew: [...t.crew, newCrew]
-            };
-          }
-          return t;
-        })
-      );
+      updatedCrew = [...activeTrip.crew, newCrew];
     }
+
+    saveTripToFirestore({ ...activeTrip, crew: updatedCrew });
 
     setCrewForm({
       namaKru: '',
@@ -267,18 +267,11 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
 
   const handleDeleteCrew = (crewId: string) => {
     if (!activeTrip) return;
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          return {
-            ...t,
-            crew: t.crew.filter((c) => c.id !== crewId),
-            distributions: t.distributions.filter((d) => d.kruId !== crewId)
-          };
-        }
-        return t;
-      })
-    );
+    saveTripToFirestore({
+      ...activeTrip,
+      crew: activeTrip.crew.filter((c) => c.id !== crewId),
+      distributions: activeTrip.distributions.filter((d) => d.kruId !== crewId)
+    });
   };
 
   // ----------------------------------------------------
@@ -289,74 +282,46 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
     const invItem = inventory.find(i => i.id === idBarang);
     if (!invItem) return;
 
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          return {
-            ...t,
-            plannedItems: [...t.plannedItems, {
-              idBarang,
-              namaBarang: invItem.namaBarang,
-              jumlahDigunakan: qty,
-              beratBarang: invItem.berat
-            }]
-          };
-        }
-        return t;
-      })
-    );
+    saveTripToFirestore({
+      ...activeTrip,
+      plannedItems: [...activeTrip.plannedItems, {
+        idBarang,
+        namaBarang: invItem.namaBarang,
+        jumlahDigunakan: qty,
+        beratBarang: invItem.berat
+      }]
+    });
   };
 
   const handleRemovePlannedItem = (idBarang: string) => {
     if (!activeTrip) return;
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          return {
-            ...t,
-            plannedItems: t.plannedItems.filter((p) => p.idBarang !== idBarang),
-            distributions: t.distributions.filter((d) => d.idBarang !== idBarang)
-          };
-        }
-        return t;
-      })
-    );
+    saveTripToFirestore({
+      ...activeTrip,
+      plannedItems: activeTrip.plannedItems.filter((p) => p.idBarang !== idBarang),
+      distributions: activeTrip.distributions.filter((d) => d.idBarang !== idBarang)
+    });
   };
 
   const handleUpdatePlannedQty = (idBarang: string, increment: boolean) => {
     if (!activeTrip) return;
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          return {
-            ...t,
-            plannedItems: t.plannedItems.map((p) => {
-              if (p.idBarang === idBarang) {
-                const targetQty = increment ? p.jumlahDigunakan + 1 : p.jumlahDigunakan - 1;
-                return { ...p, jumlahDigunakan: Math.max(1, targetQty) };
-              }
-              return p;
-            })
-          };
+    saveTripToFirestore({
+      ...activeTrip,
+      plannedItems: activeTrip.plannedItems.map((p) => {
+        if (p.idBarang === idBarang) {
+          const targetQty = increment ? p.jumlahDigunakan + 1 : p.jumlahDigunakan - 1;
+          return { ...p, jumlahDigunakan: Math.max(1, targetQty) };
         }
-        return t;
+        return p;
       })
-    );
+    });
   };
 
   const handleLoadTemplate = (items: any[]) => {
     if (!activeTrip) return;
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          return {
-            ...t,
-            plannedItems: items
-          };
-        }
-        return t;
-      })
-    );
+    saveTripToFirestore({
+      ...activeTrip,
+      plannedItems: items
+    });
   };
 
   // ----------------------------------------------------
@@ -365,50 +330,36 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
   const handleAddDistribution = (kruId: string, idBarang: string, jumlah: number) => {
     if (!activeTrip) return;
     
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          // Check if already assigned
-          const existing = t.distributions.find((d) => d.kruId === kruId && d.idBarang === idBarang);
-          if (existing) {
-            return {
-              ...t,
-              distributions: t.distributions.map((d) =>
-                d.kruId === kruId && d.idBarang === idBarang
-                  ? { ...d, jumlah: d.jumlah + jumlah }
-                  : d
-              )
-            };
-          } else {
-            return {
-              ...t,
-              distributions: [...t.distributions, {
-                id: `DIST-${Date.now()}`,
-                kruId,
-                idBarang,
-                jumlah
-              }]
-            };
-          }
-        }
-        return t;
-      })
-    );
+    // Check if already assigned
+    const existing = activeTrip.distributions.find((d) => d.kruId === kruId && d.idBarang === idBarang);
+    let updatedDistributions;
+    if (existing) {
+      updatedDistributions = activeTrip.distributions.map((d) =>
+        d.kruId === kruId && d.idBarang === idBarang
+          ? { ...d, jumlah: d.jumlah + jumlah }
+          : d
+      );
+    } else {
+      updatedDistributions = [...activeTrip.distributions, {
+        id: `DIST-${Date.now()}`,
+        kruId,
+        idBarang,
+        jumlah
+      }];
+    }
+
+    saveTripToFirestore({
+      ...activeTrip,
+      distributions: updatedDistributions
+    });
   };
 
   const handleRemoveDistributionItem = (distId: string) => {
     if (!activeTrip) return;
-    setTrips((prev) =>
-      prev.map((t) => {
-        if (t.id === activeTrip.id) {
-          return {
-            ...t,
-            distributions: t.distributions.filter((d) => d.id !== distId)
-          };
-        }
-        return t;
-      })
-    );
+    saveTripToFirestore({
+      ...activeTrip,
+      distributions: activeTrip.distributions.filter((d) => d.id !== distId)
+    });
   };
 
   // Parser helper
