@@ -155,19 +155,13 @@ export default function Dashboard({ inventory, logs, onReturnItem }: Props) {
       <div className="bg-gradient-to-r from-[#11512f] to-[#15673d] rounded-2xl p-6 text-white shadow-md relative overflow-hidden">
         <div className="relative z-10">
           <span className="px-3 py-1 bg-emerald-800/60 rounded-full text-xs font-semibold tracking-wider uppercase text-emerald-100">
-            Kru Lapangan Dashboard
+            Operasional Dashboard
           </span>
-          <h1 className="text-2xl font-bold tracking-tight mt-2.5">Selamat Datang di Portal Inventaris</h1>
+          <h1 className="text-2xl font-bold tracking-tight mt-2.5">Selamat Datang di Portal Manajemen Operasional</h1>
           <p className="text-sm text-emerald-100/90 max-w-xl mt-1.5 font-medium leading-relaxed">
-            Kelola perlengkapan outdoor, pantau persediaan trip, dan kalkulasi depresiasi aset PT. Barengin Trip secara real-time.
+            Inventaris aset, pantau persediaan barang, manajemen logistik trip, dan kalkulasi depresiasi aset PT. BARENGIN TRIP secara real time
           </p>
         </div>
-        <img 
-          src="https://lh3.googleusercontent.com/d/1C-scCTu7H2eOa-ZtDhak1JcbRhTNCCIb" 
-          alt="" 
-          className="absolute right-6 -bottom-8 w-48 h-48 object-contain opacity-15 pointer-events-none" 
-          referrerPolicy="no-referrer"
-        />
       </div>
 
       {/* Grid Kartu Statistik */}

@@ -36,6 +36,7 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firesto
 import TripDashboard from './TripDashboard';
 import TripOverviewStep1 from './TripOverviewStep1';
 import PlannedItemsStep3 from './PlannedItemsStep3';
+import TripConsumptionStep4 from './TripConsumptionStep4';
 import LogisticsDistributionStep4 from './LogisticsDistributionStep4';
 import PdfManifestStep5 from './PdfManifestStep5';
 
@@ -466,7 +467,7 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
 
         {/* SECURE STEP TIMELINE SELECTOR */}
         <div className="pt-2">
-          <div className="grid grid-cols-5 gap-1.5 p-1 bg-slate-50 border border-slate-205/50 rounded-xl text-center text-[10px] font-bold leading-none select-none">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-1.5 p-1 bg-slate-50 border border-slate-205/50 rounded-xl text-center text-[10px] font-bold leading-none select-none">
             
             <button
               onClick={() => setActiveStep(1)}
@@ -505,7 +506,7 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
               }`}
             >
               <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-mono mb-1 sm:mb-0 ${activeStep === 4 ? 'bg-[#11512f] text-white' : 'bg-slate-200 text-slate-650'}`}>4</span>
-              <span>Distribusi Cargo</span>
+              <span>Kebutuhan Konsumsi</span>
             </button>
 
             <button
@@ -515,6 +516,16 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
               }`}
             >
               <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-mono mb-1 sm:mb-0 ${activeStep === 5 ? 'bg-[#11512f] text-white' : 'bg-slate-200 text-slate-650'}`}>5</span>
+              <span>Distribusi Cargo</span>
+            </button>
+
+            <button
+              onClick={() => setActiveStep(6)}
+              className={`py-2.5 px-1 rounded-lg border border-0 cursor-pointer flex flex-col sm:flex-row items-center justify-center sm:space-x-1.5 transition ${
+                activeStep === 6 ? 'bg-white text-[#11512f] shadow-2xs font-extrabold border-slate-200' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-mono mb-1 sm:mb-0 ${activeStep === 6 ? 'bg-[#11512f] text-white' : 'bg-slate-200 text-slate-650'}`}>6</span>
               <span>Cetak Manifest</span>
             </button>
 
@@ -712,8 +723,17 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
         />
       )}
 
-      {/* STEP 4: Distribusi Logistik Berbasis Card & QR Scanner Simulator */}
+      {/* STEP 4: Kebutuhan Konsumsi (Perencanaan logistik makan) */}
       {activeStep === 4 && (
+        <TripConsumptionStep4
+          activeTrip={activeTrip}
+          onUpdateTrip={saveTripToFirestore}
+          crew={activeTrip.crew}
+        />
+      )}
+
+      {/* STEP 5: Distribusi Logistik Berbasis Card & QR Scanner Simulator */}
+      {activeStep === 5 && (
         <LogisticsDistributionStep4
           crew={activeTrip.crew}
           plannedItems={activeTrip.plannedItems}
@@ -724,8 +744,8 @@ export default function PemakaianTrip({ inventory, userRole = 'Super Admin', con
         />
       )}
 
-      {/* STEP 5: Cetak PDF Manifest */}
-      {activeStep === 5 && (
+      {/* STEP 6: Cetak PDF Manifest */}
+      {activeStep === 6 && (
         <PdfManifestStep5
           activeTrip={activeTrip}
           plannedItems={activeTrip.plannedItems}

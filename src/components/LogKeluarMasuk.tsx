@@ -177,6 +177,21 @@ export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem
               </select>
             </div>
 
+            {/* Reset Filters Trigger */}
+            {(selectedActivity !== 'Semua' || searchTerm !== '') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedActivity('Semua');
+                  setCurrentPage(1);
+                }}
+                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg flex items-center space-x-1.5 transition-all cursor-pointer border border-rose-200"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Hapus Filter</span>
+              </button>
+            )}
+
             <button
               id={`btn-open-log-${baseId}`}
               onClick={() => setIsLogFormOpen(true)}
@@ -215,7 +230,14 @@ export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem
                     </td>
                     <td className="py-3 px-4">
                       <div className="text-slate-800 font-semibold">{log.namaBarang}</div>
-                      <div className="text-[10px] text-slate-450 font-semibold mt-1">Jenis: {log.jenisAktivitas}</div>
+                      <div className="flex flex-wrap gap-1.5 items-center mt-1">
+                        <div className="text-[10px] text-slate-450 font-semibold">Jenis: {log.jenisAktivitas}</div>
+                        {(log as any).isOfflineDraft && (
+                          <span className="inline-block px-1.5 py-0.2 bg-amber-50 text-amber-700 text-[8px] rounded border border-amber-200 uppercase font-black tracking-wider animate-pulse font-sans">
+                            Offline Sync Pending
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-4 text-center">
                       <span className="text-xs font-bold text-[#11512f]">{log.jumlah} pcs</span>

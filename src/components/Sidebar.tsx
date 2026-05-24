@@ -12,7 +12,8 @@ import {
   FileCode,
   User,
   Compass,
-  ShoppingBag
+  ShoppingBag,
+  Coins
 } from 'lucide-react';
 import { AppConfig, ActiveSession } from '../types';
 
@@ -46,6 +47,8 @@ export default function Sidebar({
     { id: 'inventaris', label: 'Database Inventaris', icon: Database, hide: isCrew },
     { id: 'mutasi', label: 'Keluar - Masuk Barang', icon: ArrowLeftRight, hide: isCrew },
     { id: 'packing', label: 'Pemakaian Trip', icon: Map, hide: false },
+    { id: 'perencanaan', label: 'Perencanaan Trip', icon: Compass, hide: false },
+    { id: 'anggaran', label: 'Penganggaran Trip', icon: Coins, hide: false },
     { id: 'pengadaan', label: 'Pengadaan & Aset', icon: ShoppingBag, hide: isCrew },
     { id: 'laporan', label: 'Laporan', icon: FileInput, hide: isCrew },
     { id: 'config', label: 'Konfigurasi', icon: Settings, hide: isCrew || isTourLeader },

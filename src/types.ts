@@ -80,6 +80,12 @@ export interface ExpeditionTrip {
   crew: ExpeditionCrew[];
   plannedItems: PlannedLogisticsItem[];
   distributions: CrewDistributionItem[];
+  meals?: TripMeal[];
+  ingredients?: TripIngredient[];
+  budgetEntries?: TripBudgetEntry[];
+  picBudgets?: Record<string, number>;
+  customPagu?: number;
+  perencanaan?: TripPlan;
   damageReport?: Array<{
     idBarang: string;
     namaBarang: string;
@@ -88,6 +94,144 @@ export interface ExpeditionTrip {
     catatan: string;
     foto?: string;
   }>;
+}
+
+export interface Participant {
+  id: string;
+  namaLengkap: string;
+  gender: 'Pria' | 'Wanita';
+  usia: number;
+  whatsapp: string;
+  daruratNo: string;
+  meetingPoint: string;
+  alamat: string;
+  kondisiKhusus: string; // "asma", "vertigo", etc. for Risk Alerts
+  tingkatFisik: 'Rendah' | 'Sedang' | 'Tinggi';
+  pengalamanPendakian: string;
+  gearCriticalChecklist: string;
+  statusKehadiran: 'Hadir' | 'Belum Hadir' | 'Bermasalah';
+  catatanKru: string;
+  golonganDarah?: string;
+  riwayatPenyakit?: string;
+  alergi?: string;
+  obatPribadi?: string;
+  emergencyContactName?: string;
+  relasiEmergencyContact?: string;
+}
+
+export interface TripCrewRoleAssignment {
+  id: string;
+  namaKru: string;
+  role: 'Navigator' | 'Sweeper' | 'Dokumentasi' | 'Porter Barengin' | 'Porter Lokal';
+  posisi?: string;
+  tanggungJawab: string;
+}
+
+export interface TimelineRow {
+  id: string;
+  jam: string;
+  aktivitas: string;
+  lokasi: string;
+  pic: string;
+  catatan: string;
+}
+
+export interface SafetyRiskItem {
+  id: string;
+  potensiRisiko: string;
+  mitigasi: string;
+  levelRisiko: 'Low' | 'Medium' | 'High' | 'Critical';
+  keputusanOperasional: string;
+}
+
+export interface EmergencyScenarioItem {
+  id: string;
+  kategori: 'Meeting Point' | 'Transportasi' | 'Basecamp' | 'Trekking' | 'Camp Area';
+  skenario: string;
+  alurTindakan: string;
+  pic: string;
+  kontakDarurat: string;
+}
+
+export interface EmergencyContactItem {
+  id: string;
+  kategori: 'Basecamp' | 'SAR' | 'Basarnas' | 'Rumah Sakit' | 'Puskesmas' | 'Polisi' | 'Driver' | 'Contact Person';
+  nama: string;
+  kontak: string;
+  alamat?: string;
+}
+
+export interface TripPlan {
+  meetingPoint?: string;
+  armada?: string;
+  driver?: string;
+  estimasiCuaca?: string;
+  statusGunung?: string;
+  durasiTrip?: string;
+  jumlahPeserta?: number;
+  pesertaList?: Participant[];
+  timStruktur?: TripCrewRoleAssignment[];
+  timeline?: TimelineRow[];
+  logistikChecklist?: Record<string, boolean>; // idBarang or custom name -> checked status
+  sopBriefing?: string;
+  sopTrekking?: string;
+  sopCamp?: string;
+  sopSafety?: string;
+  sopLarangan?: string;
+  safetyRisks?: SafetyRiskItem[];
+  emergencyScenarios?: EmergencyScenarioItem[];
+  evakuasiPath?: string;
+  evakuasiShelter?: string;
+  evakuasiRanger?: string;
+  evakuasiHospital?: string;
+  evakuasiTransport?: string;
+  evakuasiMapUrl?: string; // or base64 map description
+  kontakPentingList?: EmergencyContactItem[];
+  planBAlternatif?: string;
+  planBDelay?: string;
+  planBFallback?: string;
+  planBCuaca?: string;
+  planBCancel?: string;
+  gunungKetinggian?: string;
+  gunungSuhu?: string;
+  gunungJalur?: string;
+  gunungSumberAir?: string;
+  gunungLarangan?: string;
+  gunungTipsLokal?: string;
+  gunungPermit?: string;
+  coverTitle?: string;
+  coverSubtitle?: string;
+}
+
+export interface TripBudgetEntry {
+  id: string;
+  name: string;
+  amount: number;
+  category: string;
+  pic: string;
+  notes?: string;
+}
+
+export interface TripMeal {
+  id: string;
+  type: 'Sarapan' | 'Makan Siang' | 'Makan Malam' | 'Snack' | 'Kopi/Minuman';
+  name: string;
+  portions: number;
+  notes: string;
+}
+
+export interface TripIngredient {
+  id: string;
+  name: string;
+  category: 'Sayuran' | 'Protein' | 'Bumbu' | 'Minuman' | 'Snack' | 'Gas & Fuel' | 'Bahan Kering' | 'Frozen Food' | 'Lainnya';
+  qty: number;
+  unit: string;
+  estimatedPrice: number;
+  isAvailableInBasecamp: boolean;
+  pic: string;
+  deadline?: string;
+  purchaseStatus: 'Belum Dibeli' | 'Sedang Dibeli' | 'Sudah Dibeli';
+  notes?: string;
 }
 
 export interface AppConfig {

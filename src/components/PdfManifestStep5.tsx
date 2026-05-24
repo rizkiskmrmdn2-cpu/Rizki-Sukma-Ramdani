@@ -1,4 +1,4 @@
-import React, { useId, useMemo } from 'react';
+import React, { useId, useMemo, useState, useEffect } from 'react';
 import { 
   Printer, 
   Download, 
@@ -30,6 +30,53 @@ export default function PdfManifestStep5({
   config
 }: Props) {
   const baseId = useId();
+
+  // Signature States with localStorage caching
+  const [showSignatureEditor, setShowSignatureEditor] = useState(false);
+
+  const [preparedLabel, setPreparedLabel] = useState(() => localStorage.getItem('bt_manifest_prepared_label') || "Disiapkan oleh :");
+  const [preparedName, setPreparedName] = useState(() => localStorage.getItem('bt_manifest_prepared_name') || "Operator Lapangan Basecamp");
+  const [preparedRole, setPreparedRole] = useState(() => localStorage.getItem('bt_manifest_prepared_role') || "PT. BARENGIN TRIP OPS");
+
+  const [approvedLabel, setApprovedLabel] = useState(() => localStorage.getItem('bt_manifest_approved_label') || "Disetujui oleh :");
+  const [approvedName, setApprovedName] = useState(() => localStorage.getItem('bt_manifest_approved_name') || (config?.picName || "Rizki S."));
+  const [approvedRole, setApprovedRole] = useState(() => localStorage.getItem('bt_manifest_approved_role') || "KEPALA LOGISTIK UTAMA");
+
+  const [receivedLabel, setReceivedLabel] = useState(() => localStorage.getItem('bt_manifest_received_label') || "Diterima oleh :");
+  const [receivedName, setReceivedName] = useState(() => localStorage.getItem('bt_manifest_received_name') || "Dani Al-Wahid");
+  const [receivedRole, setReceivedRole] = useState(() => localStorage.getItem('bt_manifest_received_role') || "TOUR LEADER PENUGASAN");
+
+  // Checkbox state for offline checklists per row (Pra-trip, Trip, After)
+  const [checkedItems, setCheckedItems] = useState<{ [key: string]: boolean }>({});
+  const toggleChecked = (key: string) => {
+    setCheckedItems(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Sync approved name with config if available and not yet set by user
+  useEffect(() => {
+    if (config?.picName && !localStorage.getItem('bt_manifest_approved_name')) {
+      setApprovedName(config.picName);
+    }
+  }, [config?.picName]);
+
+  // Save changes to localStorage on any update
+  useEffect(() => {
+    localStorage.setItem('bt_manifest_prepared_label', preparedLabel);
+    localStorage.setItem('bt_manifest_prepared_name', preparedName);
+    localStorage.setItem('bt_manifest_prepared_role', preparedRole);
+
+    localStorage.setItem('bt_manifest_approved_label', approvedLabel);
+    localStorage.setItem('bt_manifest_approved_name', approvedName);
+    localStorage.setItem('bt_manifest_approved_role', approvedRole);
+
+    localStorage.setItem('bt_manifest_received_label', receivedLabel);
+    localStorage.setItem('bt_manifest_received_name', receivedName);
+    localStorage.setItem('bt_manifest_received_role', receivedRole);
+  }, [
+    preparedLabel, preparedName, preparedRole,
+    approvedLabel, approvedName, approvedRole,
+    receivedLabel, receivedName, receivedRole
+  ]);
 
   // Helper weight parser
   const parseWeightToKg = (weightStr: string): number => {
@@ -192,15 +239,166 @@ export default function PdfManifestStep5({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={handlePrint}
-          className="px-4.5 py-2.5 bg-[#11512f] hover:bg-emerald-800 text-white rounded-lg border-0 cursor-pointer font-extrabold flex items-center space-x-1.5 uppercase text-[10.5px] shadow-sm ml-auto md:ml-0"
-        >
-          <Printer className="h-4.5 w-4.5 shrink-0" />
-          <span>Cetak Manifest (Print to PDF)</span>
-        </button>
+        <div className="flex flex-wrap gap-2 md:justify-end shrink-0 select-none">
+          <button
+            type="button"
+            onClick={() => setShowSignatureEditor(!showSignatureEditor)}
+            className={`px-4 py-2.5 rounded-lg border font-extrabold flex items-center space-x-1.5 uppercase text-[10.5px] transition cursor-pointer shadow-3xs ${
+              showSignatureEditor
+                ? 'bg-amber-50 border-amber-300 text-amber-800 hover:bg-amber-100'
+                : 'bg-white border-slate-250 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <span>⚙️ Edit Tanda Tangan</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="px-4.5 py-2.5 bg-[#11512f] hover:bg-[#0c3f24] text-white rounded-lg border-0 cursor-pointer font-extrabold flex items-center space-x-1.5 uppercase text-[10.5px] shadow-sm animate-pulse"
+          >
+            <Printer className="h-4.5 w-4.5 shrink-0" />
+            <span>Cetak Manifest (Print to PDF)</span>
+          </button>
+        </div>
       </div>
+
+      {/* SIGNATURES CUSTOMIZER DRAWER */}
+      {showSignatureEditor && (
+        <div className="bg-slate-100/80 border border-slate-200/80 p-5 rounded-xl space-y-4 shadow-3xs transition-all duration-300">
+          <div className="flex justify-between items-center border-b border-slate-300 pb-2">
+            <span className="text-[11px] font-black uppercase text-slate-800 tracking-wider flex items-center space-x-1.5">
+              <span>✍️ Kustomisasi Tanda Tangan Laporan</span>
+            </span>
+            <button 
+              type="button"
+              onClick={() => {
+                setPreparedLabel("Disiapkan oleh :");
+                setPreparedName("Operator Lapangan Basecamp");
+                setPreparedRole("PT. BARENGIN TRIP OPS");
+
+                setApprovedLabel("Disetujui oleh :");
+                setApprovedName(config?.picName || "Rizki S.");
+                setApprovedRole("KEPALA LOGISTIK UTAMA");
+
+                setReceivedLabel("Diterima oleh :");
+                setReceivedName("Dani Al-Wahid");
+                setReceivedRole("TOUR LEADER PENUGASAN");
+              }}
+              className="text-[9.5px] text-rose-600 hover:text-white hover:bg-rose-600 border border-rose-205 cursor-pointer font-extrabold px-2.5 py-1 rounded-md transition"
+            >
+              Reset ke Default
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            {/* COLUMN 1: DISIAPKAN */}
+            <div className="space-y-3.5 bg-white p-4 border border-slate-200 rounded-lg shadow-3xs">
+              <span className="text-[9.5px] uppercase font-black text-slate-500 tracking-wider block border-b border-slate-100 pb-1">Kiri: Disiapkan Oleh</span>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Label Kategori</label>
+                  <input 
+                    type="text" 
+                    value={preparedLabel} 
+                    onChange={(e) => setPreparedLabel(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Nama Lengkap</label>
+                  <input 
+                    type="text" 
+                    value={preparedName} 
+                    onChange={(e) => setPreparedName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Jabatan / Keterangan</label>
+                  <input 
+                    type="text" 
+                    value={preparedRole} 
+                    onChange={(e) => setPreparedRole(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 2: DISETUJUI */}
+            <div className="space-y-3.5 bg-white p-4 border border-slate-200 rounded-lg shadow-3xs">
+              <span className="text-[9.5px] uppercase font-black text-[#11512f] tracking-wider block border-b border-slate-100 pb-1">Tengah: Disetujui Oleh</span>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Label Kategori</label>
+                  <input 
+                    type="text" 
+                    value={approvedLabel} 
+                    onChange={(e) => setApprovedLabel(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Nama Lengkap</label>
+                  <input 
+                    type="text" 
+                    value={approvedName} 
+                    onChange={(e) => setApprovedName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Jabatan / Keterangan</label>
+                  <input 
+                    type="text" 
+                    value={approvedRole} 
+                    onChange={(e) => setApprovedRole(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* COLUMN 3: DITERIMA */}
+            <div className="space-y-3.5 bg-white p-4 border border-slate-200 rounded-lg shadow-3xs">
+              <span className="text-[9.5px] uppercase font-black text-slate-500 tracking-wider block border-b border-slate-100 pb-1">Kanan: Diterima Oleh</span>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Label Kategori</label>
+                  <input 
+                    type="text" 
+                    value={receivedLabel} 
+                    onChange={(e) => setReceivedLabel(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Nama Lengkap</label>
+                  <input 
+                    type="text" 
+                    value={receivedName} 
+                    onChange={(e) => setReceivedName(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-slate-400 font-bold block mb-0.5">Jabatan / Keterangan</label>
+                  <input 
+                    type="text" 
+                    value={receivedRole} 
+                    onChange={(e) => setReceivedRole(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-md text-slate-800 font-bold focus:outline-[#11512f]"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="text-[9px] text-slate-400 leading-normal font-medium">
+            ℹ️ Perubahan di atas bersifat instan dan otomatis diperbarui di preview laporan serta PDF hasil cetak. Pilihan Anda juga disimpan otomatis di peramban.
+          </p>
+        </div>
+      )}
 
       {/* DETAILED SCREEN LAYOUT VIEW OF THE MANIFEST */}
       <div id="manifest-print-document" className="bg-white border border-slate-150 rounded-2xl p-6 md:p-8 space-y-6 shadow-sm max-w-4xl mx-auto">
@@ -289,17 +487,54 @@ export default function PdfManifestStep5({
                             <th className="py-1 text-center">Kuantitas</th>
                             <th className="py-1 text-right">Berat Satuan</th>
                             <th className="py-1 text-right">Berat Total</th>
+                            <th className="py-1 text-center w-12 text-[7.5px] uppercase tracking-wider bg-slate-50/50">Pra-Trip</th>
+                            <th className="py-1 text-center w-12 text-[7.5px] uppercase tracking-wider bg-slate-50/50">Trip</th>
+                            <th className="py-1 text-center w-12 text-[7.5px] uppercase tracking-wider bg-slate-50/50">After</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100/50">
-                          {items.map((it, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50/50">
-                              <td className="py-1 text-slate-705 font-extrabold">{it.namaBarang}</td>
-                              <td className="py-1 text-center font-mono font-bold text-slate-800">{it.qty} unit</td>
-                              <td className="py-1 text-right font-mono text-slate-450">{it.beratUnit}</td>
-                              <td className="py-1 text-right font-mono text-[#11512f] font-black">{it.totalBerat.toFixed(1)} kg</td>
-                            </tr>
-                          ))}
+                          {items.map((it, idx) => {
+                            const praKey = `${crw.id}-${idx}-pra`;
+                            const tripKey = `${crw.id}-${idx}-trip`;
+                            const afterKey = `${crw.id}-${idx}-after`;
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/50">
+                                <td className="py-1 text-slate-705 font-extrabold">{it.namaBarang}</td>
+                                <td className="py-1 text-center font-mono font-bold text-slate-800">{it.qty} unit</td>
+                                <td className="py-1 text-right font-mono text-slate-450">{it.beratUnit}</td>
+                                <td className="py-1 text-right font-mono text-[#11512f] font-black">{it.totalBerat.toFixed(1)} kg</td>
+                                <td className="py-1 text-center bg-slate-50/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleChecked(praKey)}
+                                    className="mx-auto flex items-center justify-center w-4 h-4 border border-slate-400 rounded bg-white hover:border-slate-600 transition cursor-pointer select-none text-[#11512f] text-[10px] font-black focus:outline-none"
+                                    style={{ contentVisibility: 'auto' }}
+                                  >
+                                    {checkedItems[praKey] ? "✓" : ""}
+                                  </button>
+                                </td>
+                                <td className="py-1 text-center bg-slate-50/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleChecked(tripKey)}
+                                    className="mx-auto flex items-center justify-center w-4 h-4 border border-slate-400 rounded bg-white hover:border-slate-600 transition cursor-pointer select-none text-[#11512f] text-[10px] font-black focus:outline-none"
+                                  >
+                                    {checkedItems[tripKey] ? "✓" : ""}
+                                  </button>
+                                </td>
+                                <td className="py-1 text-center bg-slate-50/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleChecked(afterKey)}
+                                    className="mx-auto flex items-center justify-center w-4 h-4 border border-slate-400 rounded bg-white hover:border-slate-600 transition cursor-pointer select-none text-[#11512f] text-[10px] font-black focus:outline-none"
+                                  >
+                                    {checkedItems[afterKey] ? "✓" : ""}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -321,26 +556,26 @@ export default function PdfManifestStep5({
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 md:col-span-3 text-center border-t md:border-t-0 border-slate-100 pt-4 md:pt-0 font-bold">
             <div className="space-y-12">
-              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block font-mono">Disiapkan oleh :</span>
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block font-mono">{preparedLabel}</span>
               <div className="space-y-0.5 leading-none">
-                <span className="font-extrabold text-slate-800 text-[10.5px] underline block">Operator Lapangan Basecamp</span>
-                <span className="text-[8.5px] text-slate-400 uppercase font-mono tracking-widest leading-none">PT. BARENGIN TRIP OPS</span>
+                <span className="font-extrabold text-slate-800 text-[10.5px] underline block">{preparedName}</span>
+                <span className="text-[8.5px] text-slate-400 uppercase font-mono tracking-widest leading-none">{preparedRole}</span>
               </div>
             </div>
 
             <div className="space-y-12">
-              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block font-mono">Disetujui oleh :</span>
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block font-mono">{approvedLabel}</span>
               <div className="space-y-0.5 leading-none">
-                <span className="font-extrabold text-slate-800 text-[10.5px] underline block">{config?.picName || 'Rizki S.'}</span>
-                <span className="text-[8.5px] text-slate-400 uppercase font-mono tracking-widest leading-none">KEPALA LOGISTIK UTAMA</span>
+                <span className="font-extrabold text-slate-800 text-[10.5px] underline block">{approvedName}</span>
+                <span className="text-[8.5px] text-slate-400 uppercase font-mono tracking-widest leading-none">{approvedRole}</span>
               </div>
             </div>
 
             <div className="space-y-12 col-span-2 md:col-span-1">
-              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block font-mono">Diterima oleh :</span>
+              <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider block font-mono">{receivedLabel}</span>
               <div className="space-y-0.5 leading-none">
-                <span className="font-extrabold text-slate-800 text-[10.5px] underline block">Dani Al-Wahid</span>
-                <span className="text-[8.5px] text-slate-400 uppercase font-mono tracking-widest leading-none">TOUR LEADER PENUGASAN</span>
+                <span className="font-extrabold text-slate-800 text-[10.5px] underline block">{receivedName}</span>
+                <span className="text-[8.5px] text-slate-400 uppercase font-mono tracking-widest leading-none">{receivedRole}</span>
               </div>
             </div>
           </div>

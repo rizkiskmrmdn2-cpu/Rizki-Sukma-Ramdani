@@ -217,6 +217,22 @@ export default function DatabaseInventaris({ inventory, onSaveItem, onDeleteItem
               </select>
             </div>
 
+            {/* Reset Filters Trigger */}
+            {(selectedCategory !== 'Semua' || selectedStatus !== 'Semua' || searchTerm !== '') && (
+              <button
+                onClick={() => {
+                  setSearchTerm('');
+                  setSelectedCategory('Semua');
+                  setSelectedStatus('Semua');
+                  setCurrentPage(1);
+                }}
+                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-lg flex items-center space-x-1.5 transition-all cursor-pointer border border-rose-200"
+              >
+                <X className="h-3.5 w-3.5" />
+                <span>Hapus Filter</span>
+              </button>
+            )}
+
             {/* Add Button */}
             <button
               id={`btn-add-item-${baseId}`}
@@ -280,7 +296,14 @@ export default function DatabaseInventaris({ inventory, onSaveItem, onDeleteItem
                       {/* Detail Barang */}
                       <td className="py-3 px-4">
                         <div>
-                          <span className="block text-slate-800 font-bold text-xs">{item.namaBarang}</span>
+                          <div className="flex items-center flex-wrap gap-1.5">
+                            <span className="block text-slate-800 font-bold text-xs">{item.namaBarang}</span>
+                            {(item as any).isOfflineDraft && (
+                              <span className="inline-block px-1.5 py-0.2 bg-amber-50 text-amber-700 text-[8px] rounded border border-amber-200 uppercase font-black tracking-wider animate-pulse">
+                                Offline Draft
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[11px] text-slate-400 block mt-0.5">
                             {item.merk} {item.seri ? `• ${item.seri}` : ''} {item.ukuran ? `• Ukuran: ${item.ukuran}` : ''}
                           </span>

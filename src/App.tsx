@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Lock, 
   MapPin, 
@@ -9,12 +9,26 @@ import {
   HelpCircle,
   FileCode,
   Sparkles,
-  Info
+  Info,
+  Wifi,
+  WifiOff,
+  CloudLightning,
+  RefreshCw
 } from 'lucide-react';
 import { InventoryItem, ActivityLog, AppConfig, ActiveSession } from './types';
 import { initialInventory, initialLogs, defaultAppConfig } from './utils';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { 
+  getOfflineInventory, 
+  getOfflineLogs, 
+  getSyncQueue, 
+  saveInventoryOffline, 
+  deleteInventoryOffline, 
+  saveLogOffline, 
+  addToSyncQueue, 
+  syncOfflineDataWithFirestore 
+} from './utils/offlineDb';
 
 // Import Modular Components
 import Sidebar from './components/Sidebar';
@@ -22,6 +36,8 @@ import Dashboard from './components/Dashboard';
 import DatabaseInventaris from './components/DatabaseInventaris';
 import LogKeluarMasuk from './components/LogKeluarMasuk';
 import PemakaianTrip from './components/PemakaianTrip';
+import PerencanaanTripPage from './components/PerencanaanTripPage';
+import PenganggaranTripPage from './components/PenganggaranTripPage';
 import PengadaanAset from './components/PengadaanAset';
 import Laporan from './components/Laporan';
 import Konfigurasi from './components/Konfigurasi';
@@ -39,6 +55,12 @@ export default function App() {
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [config, setConfig] = useState<AppConfig>(defaultAppConfig);
 
+  // Offline-First Tracking States
+  const [offlineInventory, setOfflineInventory] = useState<InventoryItem[]>([]);
+  const [offlineLogs, setOfflineLogs] = useState<ActivityLog[]>([]);
+  const [syncQueue, setSyncQueue] = useState<any[]>([]);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
   // Authentication Fields
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -52,19 +74,17 @@ export default function App() {
     // 1. Sync inventory
     const unsubscribeInv = onSnapshot(collection(db, 'inventory'), (snapshot) => {
       if (snapshot.empty) {
-        // Automatically seed with default sample inventory on first boot
-        setInventory(initialInventory);
-        if (initialInventory.length > 0) {
-          initialInventory.forEach((item) => {
-            setDoc(doc(db, 'inventory', item.id), item).catch((err) => {
-              console.error('Error seeding inventory document: ', err);
-            });
-          });
-        }
+        setInventory([]);
       } else {
         const data: InventoryItem[] = [];
         snapshot.forEach((d) => {
-          data.push(d.data() as InventoryItem);
+          const item = d.data() as InventoryItem;
+          if (item.id !== 'BT-ID-001' && item.id !== 'BT-ID-002' && item.id !== 'BT-ID-003') {
+            data.push(item);
+          } else {
+            // Delete historical default seed items from database
+            deleteDoc(doc(db, 'inventory', item.id)).catch(() => {});
+          }
         });
         // Sort items by original ID numeric value
         data.sort((a, b) => {
@@ -81,19 +101,17 @@ export default function App() {
     // 2. Sync mutation logs
     const unsubscribeLogs = onSnapshot(collection(db, 'logs'), (snapshot) => {
       if (snapshot.empty) {
-        // Automatically seed default activity logs on first boot
-        setLogs(initialLogs);
-        if (initialLogs.length > 0) {
-          initialLogs.forEach((log) => {
-            setDoc(doc(db, 'logs', log.id), log).catch((err) => {
-              console.error('Error seeding logs document: ', err);
-            });
-          });
-        }
+        setLogs([]);
       } else {
         const data: ActivityLog[] = [];
         snapshot.forEach((d) => {
-          data.push(d.data() as ActivityLog);
+          const log = d.data() as ActivityLog;
+          if (log.id !== 'LOG-001') {
+            data.push(log);
+          } else {
+            // Delete historical default seed logs from database
+            deleteDoc(doc(db, 'logs', log.id)).catch(() => {});
+          }
         });
         // Sort newest logs first
         data.sort((a, b) => b.tanggal.localeCompare(a.tanggal) || b.id.localeCompare(a.id));
@@ -139,6 +157,122 @@ export default function App() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Load local off-grid datasets
+  const loadOfflineData = async () => {
+    try {
+      const offInv = await getOfflineInventory();
+      const offLogs = await getOfflineLogs();
+      const queue = await getSyncQueue();
+      setOfflineInventory(offInv);
+      setOfflineLogs(offLogs);
+      setSyncQueue(queue);
+    } catch (err) {
+      console.warn('Gagal memuat basis data offline (IndexedDB):', err);
+    }
+  };
+
+  // Connection monitoring and background synchronizer
+  useEffect(() => {
+    loadOfflineData();
+
+    const handleConnectionOnline = async () => {
+      setIsOnline(true);
+      showToast('Koneksi internet terdeteksi kembali! Memulai sinkronisasi otomatis...', 'info');
+      
+      const successCount = await syncOfflineDataWithFirestore(
+        () => {}, 
+        (msg, type) => showToast(msg, type)
+      );
+      
+      if (successCount > 0) {
+        showToast(`${successCount} pembaruan logistik berhasil disinkronkan ke cloud database.`, 'success');
+      }
+      
+      loadOfflineData();
+    };
+
+    const handleConnectionOffline = () => {
+      setIsOnline(false);
+      showToast('Aplikasi beralih ke Mode Offline. Input data tetap dapat dilakukan dengan aman.', 'info');
+    };
+
+    window.addEventListener('online', handleConnectionOnline);
+    window.addEventListener('offline', handleConnectionOffline);
+
+    // Passive loop scheduler to retry synchronizing tasks every 12 seconds if navigator is online
+    const interval = setInterval(async () => {
+      if (navigator.onLine && syncQueue.length > 0) {
+        try {
+          const synced = await syncOfflineDataWithFirestore(
+            () => {},
+            (msg, type) => showToast(msg, type)
+          );
+          if (synced > 0) {
+            loadOfflineData();
+          }
+        } catch (e) {
+          console.error('[Background AutoSync Loop Failure]', e);
+        }
+      }
+    }, 12000);
+
+    return () => {
+      window.removeEventListener('online', handleConnectionOnline);
+      window.removeEventListener('offline', handleConnectionOffline);
+      clearInterval(interval);
+    };
+  }, [syncQueue.length]);
+
+  // Merge Firestore data with local offline storage modifications
+  const displayedInventory = useMemo(() => {
+    const merged = [...inventory];
+    
+    // Inject any offline items/updates
+    offlineInventory.forEach((offItem) => {
+      const idx = merged.findIndex((x) => x.id === offItem.id);
+      if (idx !== -1) {
+        merged[idx] = { ...offItem, isOfflineDraft: true } as any;
+      } else {
+        merged.push({ ...offItem, isOfflineDraft: true } as any);
+      }
+    });
+
+    // Remove deleted items if their deletion is currently pending in queue
+    syncQueue.forEach((task) => {
+      if (task.type === 'DELETE_ITEM') {
+        const idToDelete = task.payload as string;
+        const idx = merged.findIndex((x) => x.id === idToDelete);
+        if (idx !== -1) {
+          merged.splice(idx, 1);
+        }
+      }
+    });
+
+    // Sort items by numeric ID value
+    return merged.sort((a, b) => {
+      const numA = parseInt(a.id.replace('BT-ID-', ''), 10);
+      const numB = parseInt(b.id.replace('BT-ID-', ''), 10);
+      return numA - numB;
+    });
+  }, [inventory, offlineInventory, syncQueue]);
+
+  const displayedLogs = useMemo(() => {
+    const merged = [...logs];
+    
+    // Inject offline logs
+    offlineLogs.forEach((offLog) => {
+      const idx = merged.findIndex((x) => x.id === offLog.id);
+      if (idx !== -1) {
+        merged[idx] = { ...offLog, isOfflineDraft: true } as any;
+      } else {
+        merged.push({ ...offLog, isOfflineDraft: true } as any);
+      }
+    });
+
+    // Sort newest logs first
+    return merged.sort((a, b) => b.tanggal.localeCompare(a.tanggal) || b.id.localeCompare(a.id));
+  }, [logs, offlineLogs]);
+
   // 2. Authentication Logic
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,7 +317,7 @@ export default function App() {
     if (!itemId) {
       // Add Mode
       let maxNum = 0;
-      inventory.forEach((item) => {
+      displayedInventory.forEach((item) => {
         const num = parseInt(item.id.replace('BT-ID-', ''), 10);
         if (!isNaN(num) && num > maxNum) maxNum = num;
       });
@@ -196,26 +330,66 @@ export default function App() {
       id: itemId
     } as InventoryItem;
 
+    if (!navigator.onLine) {
+      try {
+        await saveInventoryOffline(newItem);
+        await addToSyncQueue({ type: 'SAVE_ITEM', payload: newItem });
+        showToast(`[OFFLINE] Barang "${newItem.namaBarang}" disimpan secara lokal (antrean sinkronisasi).`, 'info');
+        loadOfflineData();
+      } catch (err) {
+        showToast('Gagal memproses penyimpanan offline', 'error');
+      }
+      return;
+    }
+
     try {
       await setDoc(doc(db, 'inventory', itemId), newItem);
       showToast(`Barang "${newItem.namaBarang}" berhasil disimpan!`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `inventory/${itemId}`);
+      console.warn('Network write failed, caching offline', err);
+      try {
+        await saveInventoryOffline(newItem);
+        await addToSyncQueue({ type: 'SAVE_ITEM', payload: newItem });
+        showToast(`Koneksi lambat. Barang "${newItem.namaBarang}" disimpan lokal & masuk antrean sinkronisasi.`, 'info');
+        loadOfflineData();
+      } catch (offlineErr) {
+        handleFirestoreError(err, OperationType.WRITE, `inventory/${itemId}`);
+      }
     }
   };
 
   const handleDeleteItem = async (id: string) => {
+    if (!navigator.onLine) {
+      try {
+        await deleteInventoryOffline(id);
+        await addToSyncQueue({ type: 'DELETE_ITEM', payload: id });
+        showToast(`[OFFLINE] Barang dengan ID ${id} ditandai hapus dan akan disinkronkan nanti.`, 'info');
+        loadOfflineData();
+      } catch (err) {
+        showToast('Gagal memproses penghapusan offline', 'error');
+      }
+      return;
+    }
+
     try {
       await deleteDoc(doc(db, 'inventory', id));
       showToast(`Barang dengan ID ${id} berhasil dihapus dari database.`, 'info');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `inventory/${id}`);
+      console.warn('Network deletion failed, queuing offline', err);
+      try {
+        await deleteInventoryOffline(id);
+        await addToSyncQueue({ type: 'DELETE_ITEM', payload: id });
+        showToast(`Koneksi lambat. Penghapusan ID ${id} dikoordinasi offline.`, 'info');
+        loadOfflineData();
+      } catch (offlineErr) {
+        handleFirestoreError(err, OperationType.DELETE, `inventory/${id}`);
+      }
     }
   };
 
   const handleAddLog = async (logData: Partial<ActivityLog>) => {
     let maxIdNum = 0;
-    logs.forEach((log) => {
+    displayedLogs.forEach((log) => {
       const num = parseInt(log.id.replace('LOG-', ''), 10);
       if (!isNaN(num) && num > maxIdNum) maxIdNum = num;
     });
@@ -230,7 +404,9 @@ export default function App() {
     } as ActivityLog;
 
     // Update stok barang di database
-    const itemToUpdate = inventory.find(item => item.id === logData.idBarang);
+    const itemToUpdate = displayedInventory.find(item => item.id === logData.idBarang);
+    let updatedItem: InventoryItem | undefined = undefined;
+    
     if (itemToUpdate) {
       const qtyMutasi = logData.jumlah || 1;
       let newQty = itemToUpdate.kuantitas;
@@ -250,14 +426,49 @@ export default function App() {
         }
       }
 
+      updatedItem = {
+        ...itemToUpdate,
+        kuantitas: newQty,
+        statusBarang: newStatus
+      };
+    }
+
+    if (!navigator.onLine) {
       try {
-        await setDoc(doc(db, 'inventory', itemToUpdate.id), {
-          ...itemToUpdate,
-          kuantitas: newQty,
-          statusBarang: newStatus
+        await saveLogOffline(newLog);
+        if (updatedItem) {
+          await saveInventoryOffline(updatedItem);
+        }
+        await addToSyncQueue({
+          type: 'ADD_LOG',
+          payload: { log: newLog, updatedItem }
         });
+        showToast(`[OFFLINE] Aktivitas ${logData.jenisAktivitas} dicatat secara lokal.`, 'info');
+        loadOfflineData();
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `inventory/${itemToUpdate.id}`);
+        showToast('Gagal memproses pencatatan aktivitas offline', 'error');
+      }
+      return;
+    }
+
+    if (updatedItem) {
+      try {
+        await setDoc(doc(db, 'inventory', updatedItem.id), updatedItem);
+      } catch (err) {
+        console.warn('Failed item qty sync, fallback both to offline', err);
+        try {
+          await saveLogOffline(newLog);
+          await saveInventoryOffline(updatedItem);
+          await addToSyncQueue({
+            type: 'ADD_LOG',
+            payload: { log: newLog, updatedItem }
+          });
+          showToast(`Koneksi tak stabil. Data mutasi ${logData.jenisAktivitas} dicadangkan offline.`, 'info');
+          loadOfflineData();
+          return;
+        } catch (offlineErr) {
+          handleFirestoreError(err, OperationType.WRITE, `inventory/${updatedItem.id}`);
+        }
       }
     }
 
@@ -265,34 +476,76 @@ export default function App() {
       await setDoc(doc(db, 'logs', nextLogId), newLog);
       showToast(`Aktivitas ${logData.jenisAktivitas} berhasil dicatat dan stok disinkronisasi.`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `logs/${nextLogId}`);
+      console.warn('Failed log sync, fallback log to offline', err);
+      try {
+        await saveLogOffline(newLog);
+        await addToSyncQueue({
+          type: 'ADD_LOG',
+          payload: { log: newLog, updatedItem }
+        });
+        showToast(`Koneksi terganggu. Log aktivitas ${logData.jenisAktivitas} disimpan offline.`, 'info');
+        loadOfflineData();
+      } catch (offlineErr) {
+        handleFirestoreError(err, OperationType.WRITE, `logs/${nextLogId}`);
+      }
     }
   };
 
   const handleReturnItem = async (logId: string, kondisiKembali: 'Baru' | 'Baik' | 'Rusak Ringan' | 'Tidak Dapat Dipakai') => {
-    const logToReturn = logs.find((log) => log.id === logId);
+    const logToReturn = displayedLogs.find((log) => log.id === logId);
     if (!logToReturn || logToReturn.statusPengembalian === 'Sudah Kembali') return;
 
-    // Perbarui status log
-    const updatedLog = {
+    const updatedLog: ActivityLog = {
       ...logToReturn,
       statusPengembalian: 'Sudah Kembali' as const,
       kondisiKembali,
       tanggal: new Date().toISOString().replace('T', ' ').substring(0, 16)
     };
 
-    // Kembalikan stok item barang
-    const itemToUpdate = inventory.find(item => item.id === logToReturn.idBarang);
+    const itemToUpdate = displayedInventory.find(item => item.id === logToReturn.idBarang);
+    let updatedItem: InventoryItem | undefined = undefined;
     if (itemToUpdate) {
+      updatedItem = {
+        ...itemToUpdate,
+        kuantitas: itemToUpdate.kuantitas + logToReturn.jumlah,
+        statusBarang: 'Ready' as const,
+        kondisiBarang: kondisiKembali
+      };
+    }
+
+    if (!navigator.onLine) {
       try {
-        await setDoc(doc(db, 'inventory', itemToUpdate.id), {
-          ...itemToUpdate,
-          kuantitas: itemToUpdate.kuantitas + logToReturn.jumlah,
-          statusBarang: 'Ready' as const,
-          kondisiBarang: kondisiKembali
+        await saveLogOffline(updatedLog);
+        if (updatedItem) {
+          await saveInventoryOffline(updatedItem);
+        }
+        await addToSyncQueue({
+          type: 'RETURN_ITEM',
+          payload: { log: updatedLog, updatedItem }
         });
+        showToast(`[OFFLINE] Pengembalian dicatat secara lokal.`, 'info');
+        loadOfflineData();
       } catch (err) {
-        handleFirestoreError(err, OperationType.WRITE, `inventory/${itemToUpdate.id}`);
+        showToast('Gagal memproses pengembalian offline', 'error');
+      }
+      return;
+    }
+
+    if (updatedItem) {
+      try {
+        await setDoc(doc(db, 'inventory', updatedItem.id), updatedItem);
+      } catch (err) {
+        console.warn('Failed return item update, fell back to offline queue', err);
+        try {
+          await saveLogOffline(updatedLog);
+          await saveInventoryOffline(updatedItem);
+          await addToSyncQueue({
+            type: 'RETURN_ITEM',
+            payload: { log: updatedLog, updatedItem }
+          });
+          loadOfflineData();
+          return;
+        } catch (offlineErr) {}
       }
     }
 
@@ -300,7 +553,18 @@ export default function App() {
       await setDoc(doc(db, 'logs', logId), updatedLog);
       showToast(`Barang "${logToReturn.namaBarang}" sebanyak ${logToReturn.jumlah} pcs berhasil dikembalikan ke Basecamp.`, 'success');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `logs/${logId}`);
+      console.warn('Failed return log update, fell back to offline queue', err);
+      try {
+        await saveLogOffline(updatedLog);
+        if (updatedItem) await saveInventoryOffline(updatedItem);
+        await addToSyncQueue({
+          type: 'RETURN_ITEM',
+          payload: { log: updatedLog, updatedItem }
+        });
+        loadOfflineData();
+      } catch (offlineErr) {
+        handleFirestoreError(err, OperationType.WRITE, `logs/${logId}`);
+      }
     }
   };
 
@@ -492,11 +756,32 @@ export default function App() {
             <span className="text-xs font-extrabold tracking-wider text-[#11512f] uppercase">PT. BARENGIN TRIP LOGISTIK</span>
           </div>
           
-          <div className="text-[10px] text-slate-400 font-mono font-bold flex items-center space-x-4">
-            <span className="bg-emerald-50 text-[#11512f] px-2.5 py-1 rounded-md border border-emerald-100">
+          <div className="text-[10px] font-mono font-bold flex items-center space-x-3.5 select-none">
+            {/* Sync Queue Status */}
+            {syncQueue.length > 0 && (
+              <span className="bg-amber-50 text-amber-805 px-2.5 py-1 rounded-md border border-amber-200/60 flex items-center space-x-1.5 animate-pulse shrink-0">
+                <RefreshCw className="h-3 w-3 animate-spin text-amber-600" />
+                <span className="hidden sm:inline">Sync Antrean ({syncQueue.length})</span>
+                <span className="sm:hidden">Draft ({syncQueue.length})</span>
+              </span>
+            )}
+
+            {/* Connection Status indicator */}
+            {isOnline ? (
+              <span className="bg-emerald-50 text-emerald-800 px-2.5 py-1.0 rounded-md border border-emerald-100 flex items-center space-x-1 shrink-0">
+                <Wifi className="h-3 w-3 text-emerald-600 shrink-0" />
+                <span>ONLINE</span>
+              </span>
+            ) : (
+              <span className="bg-rose-50 text-rose-800 px-2.5 py-1.0 rounded-md border border-rose-200 flex items-center space-x-1 animate-pulse shrink-0">
+                <WifiOff className="h-3 w-3 text-rose-650 shrink-0" />
+                <span>OFFLINE MODE</span>
+              </span>
+            )}
+
+            <span className="bg-emerald-50 text-[#11512f] px-2.5 py-1 rounded-md border border-emerald-100 hidden md:inline shrink-0">
               ● Serverless Google Sheet Sync
             </span>
-            <span className="hidden sm:inline">22 Mei 2026, 11:09</span>
           </div>
         </header>
 
@@ -504,15 +789,15 @@ export default function App() {
         <main className="p-6 flex-1 max-w-6xl w-full mx-auto pb-12">
           {activeTab === 'dashboard' && (
             <Dashboard 
-              inventory={inventory} 
-              logs={logs} 
+              inventory={displayedInventory} 
+              logs={displayedLogs} 
               onReturnItem={handleReturnItem} 
             />
           )}
 
           {activeTab === 'inventaris' && (
             <DatabaseInventaris 
-              inventory={inventory} 
+              inventory={displayedInventory} 
               onSaveItem={handleSaveItem} 
               onDeleteItem={handleDeleteItem} 
               picName={config.picName} 
@@ -521,8 +806,8 @@ export default function App() {
 
           {activeTab === 'mutasi' && (
             <LogKeluarMasuk 
-              inventory={inventory} 
-              logs={logs} 
+              inventory={displayedInventory} 
+              logs={displayedLogs} 
               onAddLog={handleAddLog} 
               onReturnItem={handleReturnItem} 
               picName={config.picName} 
@@ -531,15 +816,23 @@ export default function App() {
 
           {activeTab === 'packing' && (
             <PemakaianTrip 
-              inventory={inventory} 
+              inventory={displayedInventory} 
               userRole={session?.role || ''}
               config={config}
             />
           )}
 
+          {activeTab === 'perencanaan' && (
+            <PerencanaanTripPage />
+          )}
+
+          {activeTab === 'anggaran' && (
+            <PenganggaranTripPage />
+          )}
+
           {activeTab === 'pengadaan' && (
             <PengadaanAset 
-              inventory={inventory}
+              inventory={displayedInventory}
               onAddInventarisItem={handleSaveItem}
               userRole={session?.role || ''}
             />
@@ -547,8 +840,8 @@ export default function App() {
 
           {activeTab === 'laporan' && (
             <Laporan 
-              inventory={inventory} 
-              logs={logs} 
+              inventory={displayedInventory} 
+              logs={displayedLogs} 
               config={config} 
             />
           )}
