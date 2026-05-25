@@ -18,7 +18,7 @@ import {
 import { InventoryItem, ActivityLog, AppConfig, ActiveSession } from './types';
 import { initialInventory, initialLogs, defaultAppConfig } from './utils';
 import { db, handleFirestoreError, OperationType } from './firebase';
-import { collection, onSnapshot, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { 
   getOfflineInventory, 
   getOfflineLogs, 
@@ -69,6 +69,31 @@ export default function App() {
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
+  // One-time database clean sweep to clear any legacy residual records safely on mount
+  useEffect(() => {
+    const sweepDatabase = async () => {
+      if (localStorage.getItem('db_clean_sweep_v1') !== 'true') {
+        try {
+          const invSnap = await getDocs(collection(db, 'inventory'));
+          invSnap.forEach((d) => {
+            deleteDoc(doc(db, 'inventory', d.id)).catch(() => {});
+          });
+
+          const logsSnap = await getDocs(collection(db, 'logs'));
+          logsSnap.forEach((d) => {
+            deleteDoc(doc(db, 'logs', d.id)).catch(() => {});
+          });
+
+          localStorage.setItem('db_clean_sweep_v1', 'true');
+          console.log('[Clean Sweep] Legacy residual data cleaned up.');
+        } catch (err) {
+          console.warn('[Clean Sweep] Error performing database clean sweep:', err);
+        }
+      }
+    };
+    sweepDatabase();
+  }, []);
+
   // Load and listen to Firestore real-time snapshots
   useEffect(() => {
     // 1. Sync inventory
@@ -81,9 +106,6 @@ export default function App() {
           const item = d.data() as InventoryItem;
           if (item.id !== 'BT-ID-001' && item.id !== 'BT-ID-002' && item.id !== 'BT-ID-003') {
             data.push(item);
-          } else {
-            // Delete historical default seed items from database
-            deleteDoc(doc(db, 'inventory', item.id)).catch(() => {});
           }
         });
         // Sort items by original ID numeric value
@@ -108,9 +130,6 @@ export default function App() {
           const log = d.data() as ActivityLog;
           if (log.id !== 'LOG-001') {
             data.push(log);
-          } else {
-            // Delete historical default seed logs from database
-            deleteDoc(doc(db, 'logs', log.id)).catch(() => {});
           }
         });
         // Sort newest logs first
