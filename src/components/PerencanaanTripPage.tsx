@@ -40,6 +40,20 @@ export default function PerencanaanTripPage() {
   const [selectedTripId, setSelectedTripId] = useState<string>('');
   const [activePlannerSection, setActivePlannerSection] = useState<string>('cover');
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [logoUrl, setLogoUrl] = useState<string>('');
+
+  // Load and listen to config settings to fetch the custom logo dynamically
+  useEffect(() => {
+    const unsubscribe = onSnapshot(doc(db, 'config', 'settings'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        setLogoUrl(data.logoUrl || '');
+      }
+    }, (error) => {
+      console.warn('[PerencanaanTripPage] Could not fetch config logo:', error);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Load and listen to trips
   useEffect(() => {
@@ -726,10 +740,13 @@ export default function PerencanaanTripPage() {
                     </div>
                     <div className="py-1">
                       <img 
-                        src="https://docs.google.com/uc?export=download&id=1u2IZPXPerRN5sEJME9G8Quxkq791_52n" 
+                        src={logoUrl || 'https://lh3.googleusercontent.com/d/1C-scCTu7H2eOa-ZtDhak1JcbRhTNCCIb'} 
                         alt="Barengintrip Logo" 
                         className="h-28 mx-auto object-contain"
                         referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.currentTarget.src = 'https://lh3.googleusercontent.com/d/1C-scCTu7H2eOa-ZtDhak1JcbRhTNCCIb';
+                        }}
                       />
                     </div>
                     <div className="text-[7px] text-slate-400 font-mono font-medium uppercase leading-none pb-1.5 border-t pt-1.5 border-slate-200">
