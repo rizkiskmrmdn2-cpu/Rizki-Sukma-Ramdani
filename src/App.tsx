@@ -104,9 +104,7 @@ export default function App() {
         const data: InventoryItem[] = [];
         snapshot.forEach((d) => {
           const item = d.data() as InventoryItem;
-          if (item.id !== 'BT-ID-001' && item.id !== 'BT-ID-002' && item.id !== 'BT-ID-003') {
-            data.push(item);
-          }
+          data.push(item);
         });
         // Sort items by original ID numeric value
         data.sort((a, b) => {
@@ -128,9 +126,7 @@ export default function App() {
         const data: ActivityLog[] = [];
         snapshot.forEach((d) => {
           const log = d.data() as ActivityLog;
-          if (log.id !== 'LOG-001') {
-            data.push(log);
-          }
+          data.push(log);
         });
         // Sort newest logs first
         data.sort((a, b) => b.tanggal.localeCompare(a.tanggal) || b.id.localeCompare(a.id));
