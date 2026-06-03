@@ -69,31 +69,6 @@ export default function App() {
   // Toast Notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // One-time database clean sweep to clear any legacy residual records safely on mount
-  useEffect(() => {
-    const sweepDatabase = async () => {
-      if (localStorage.getItem('db_clean_sweep_v1') !== 'true') {
-        try {
-          const invSnap = await getDocs(collection(db, 'inventory'));
-          invSnap.forEach((d) => {
-            deleteDoc(doc(db, 'inventory', d.id)).catch(() => {});
-          });
-
-          const logsSnap = await getDocs(collection(db, 'logs'));
-          logsSnap.forEach((d) => {
-            deleteDoc(doc(db, 'logs', d.id)).catch(() => {});
-          });
-
-          localStorage.setItem('db_clean_sweep_v1', 'true');
-          console.log('[Clean Sweep] Legacy residual data cleaned up.');
-        } catch (err) {
-          console.warn('[Clean Sweep] Error performing database clean sweep:', err);
-        }
-      }
-    };
-    sweepDatabase();
-  }, []);
-
   // Load and listen to Firestore real-time snapshots
   useEffect(() => {
     // 1. Sync inventory
