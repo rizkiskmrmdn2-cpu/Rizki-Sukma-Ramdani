@@ -43,7 +43,7 @@ export function generateItemId(index: number): string {
 // Jika url dimulai dengan drive.google.com/file, kita proxy atau tunjukkan thumbnail jika bisa
 // Namun secara visual kita sediakan fallback icon/placeholder outdoor yang menawan
 export function getProductImage(item: InventoryItem): string {
-  if (item.fotoBarang && item.fotoBarang.startsWith('http')) {
+  if (item.fotoBarang && item.fotoBarang.trim() !== '') {
     return item.fotoBarang;
   }
   
