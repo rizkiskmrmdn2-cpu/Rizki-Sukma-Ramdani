@@ -27,7 +27,8 @@ import {
   deleteInventoryOffline, 
   saveLogOffline, 
   addToSyncQueue, 
-  syncOfflineDataWithFirestore 
+  syncOfflineDataWithFirestore,
+  clearOfflineLogItem
 } from './utils/offlineDb';
 
 // Import Modular Components
@@ -558,6 +559,44 @@ export default function App() {
     }
   };
 
+  const handleDeleteLog = async (logId: string) => {
+    try {
+      await deleteDoc(doc(db, 'logs', logId));
+      await clearOfflineLogItem(logId);
+      showToast(`Log mutasi ${logId} berhasil dihapus dari database.`, 'info');
+    } catch (err) {
+      console.warn('Network deletion of log failed, trying local offline clear', err);
+      try {
+        await clearOfflineLogItem(logId);
+        showToast(`Log mutasi ${logId} berhasil dihapus secara lokal.`, 'info');
+        loadOfflineData();
+      } catch (offlineErr) {
+        handleFirestoreError(err, OperationType.DELETE, `logs/${logId}`);
+      }
+    }
+  };
+
+  const handleEditLog = async (updatedLog: ActivityLog) => {
+    try {
+      await setDoc(doc(db, 'logs', updatedLog.id), updatedLog);
+      await saveLogOffline(updatedLog);
+      showToast(`Log mutasi ${updatedLog.id} berhasil diperbarui.`, 'info');
+    } catch (err) {
+      console.warn('Network log edit failed, trying local offline sync', err);
+      try {
+        await saveLogOffline(updatedLog);
+        await addToSyncQueue({
+          type: 'ADD_LOG',
+          payload: { log: updatedLog }
+        });
+        showToast(`Log mutasi ${updatedLog.id} diperbarui secara offline lokal.`, 'info');
+        loadOfflineData();
+      } catch (offlineErr) {
+        handleFirestoreError(err, OperationType.WRITE, `logs/${updatedLog.id}`);
+      }
+    }
+  };
+
   const handleSaveConfig = async (newConfig: AppConfig) => {
     try {
       await setDoc(doc(db, 'config', 'settings'), newConfig);
@@ -801,6 +840,9 @@ export default function App() {
               onAddLog={handleAddLog} 
               onReturnItem={handleReturnItem} 
               picName={config.picName} 
+              userRole={session?.role || ''}
+              onDeleteLog={handleDeleteLog}
+              onEditLog={handleEditLog}
             />
           )}
 

@@ -14,7 +14,10 @@ import {
   Compass,
   ChevronLeft,
   ChevronRight,
-  X
+  X,
+  Trash2,
+  Eye,
+  Edit2
 } from 'lucide-react';
 import { InventoryItem, ActivityLog } from '../types';
 
@@ -24,6 +27,9 @@ interface Props {
   onAddLog: (newLog: Partial<ActivityLog>) => void;
   onReturnItem: (logId: string, kondisiKembali: 'Baru' | 'Baik' | 'Rusak Ringan' | 'Tidak Dapat Dipakai') => void;
   picName: string;
+  userRole?: string;
+  onDeleteLog?: (logId: string) => void;
+  onEditLog?: (updatedLog: ActivityLog) => void;
 }
 
 const CATEGORIES = [
@@ -31,8 +37,11 @@ const CATEGORIES = [
   'Bahan Baku Konsumsi', 'Perlengkapan Habis Pakai', 'Dokumentasi', 'P3K', 'Obat-obatan'
 ];
 
-export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem, picName }: Props) {
+export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem, picName, userRole, onDeleteLog, onEditLog }: Props) {
   const baseId = useId();
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [viewingLogId, setViewingLogId] = useState<string | null>(null);
+  const [editingLog, setEditingLog] = useState<ActivityLog | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedActivity, setSelectedActivity] = useState<string>('Semua');
   const [isLogFormOpen, setIsLogFormOpen] = useState(false);
@@ -47,6 +56,11 @@ export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem
   const logBeingReturned = useMemo(() => {
     return logs.find((l) => l.id === returningLogId);
   }, [logs, returningLogId]);
+
+  // Selected item log for detail viewing
+  const logBeingViewed = useMemo(() => {
+    return logs.find((l) => l.id === viewingLogId);
+  }, [logs, viewingLogId]);
 
   // New Log State
   const [logForm, setLogForm] = useState<Partial<ActivityLog>>({
@@ -267,21 +281,62 @@ export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem
                     </td>
                     <td className="py-3 px-4 font-bold text-slate-600">{log.pic}</td>
                     <td className="py-3 px-4 text-right">
-                      {log.statusPengembalian === 'Belum Kembali' ? (
+                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                        {/* Detail Action */}
                         <button
                           type="button"
-                          onClick={() => {
-                            setKondisiKembali(log.kondisiKeluar || 'Baik');
-                            setReturningLogId(log.id);
-                          }}
-                          className="inline-flex items-center space-x-1.5 px-2.5 py-1.5 bg-[#11512f] hover:bg-emerald-800 text-white text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all hover:shadow-xs active:scale-95 cursor-pointer border-0 font-sans"
+                          onClick={() => setViewingLogId(log.id)}
+                          className="inline-flex items-center space-x-1.5 px-2 py-1.5 bg-blue-50 hover:bg-blue-150 text-blue-700 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all hover:shadow-xs active:scale-95 cursor-pointer border border-blue-200 font-sans shrink-0"
+                          title="Lihat Detail Log"
                         >
-                          <Check className="h-3.5 w-3.5" />
-                          <span>M. Kembali</span>
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Detail</span>
                         </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-300 font-bold font-mono">-</span>
-                      )}
+
+                        {/* Edit Action */}
+                        {userRole === 'Super Admin' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLog({ ...log });
+                            }}
+                            className="inline-flex items-center space-x-1.5 px-2 py-1.5 bg-amber-50 hover:bg-amber-150 text-amber-700 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all hover:shadow-xs active:scale-95 cursor-pointer border border-amber-200 font-sans shrink-0"
+                            title="Edit Log Mutasi"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+
+                        {/* M. Kembali Action */}
+                        {log.statusPengembalian === 'Belum Kembali' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setKondisiKembali(log.kondisiKeluar || 'Baik');
+                              setReturningLogId(log.id);
+                            }}
+                            className="inline-flex items-center space-x-1.5 px-2 py-1.5 bg-[#11512f] hover:bg-emerald-800 text-white text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all hover:shadow-xs active:scale-95 cursor-pointer border-0 font-sans shrink-0"
+                            title="Tandai Sudah Kembali"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Kembali</span>
+                          </button>
+                        )}
+                        
+                        {/* Delete Action */}
+                        {userRole === 'Super Admin' && onDeleteLog && (
+                          <button
+                            type="button"
+                            onClick={() => setDeletingLogId(log.id)}
+                            className="inline-flex items-center space-x-1.5 px-2 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] uppercase tracking-wider font-bold rounded-lg transition-all hover:shadow-xs active:scale-95 cursor-pointer border border-rose-200 font-sans shrink-0"
+                            title="Hapus Log"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Hapus</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -603,6 +658,375 @@ export default function LogKeluarMasuk({ inventory, logs, onAddLog, onReturnItem
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deletingLogId && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
+          onClick={() => setDeletingLogId(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setDeletingLogId(null)}
+              className="absolute top-4 right-4 p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer z-10"
+              title="Tutup"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center space-x-2 text-rose-600">
+                <AlertCircle className="h-5 w-5 animate-bounce" />
+                <h3 className="text-sm font-black text-rose-950 uppercase tracking-wide">Hapus Log Mutasi</h3>
+              </div>
+              
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Apakah Anda yakin ingin menghapus catatan log ini? Tindakan ini bersifat permanen dan tidak dapat dibatalkan.
+              </p>
+
+              {(() => {
+                const logToDelete = logs.find(l => l.id === deletingLogId);
+                if (!logToDelete) return null;
+                return (
+                  <div className="bg-rose-50/80 rounded-xl p-3.5 space-y-2 border border-rose-100">
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500 font-semibold">ID Log / Tanggal:</span>
+                      <span className="text-slate-800 font-bold">{logToDelete.id} ({logToDelete.tanggal})</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500 font-semibold">Nama Barang:</span>
+                      <span className="text-slate-800 font-bold">{logToDelete.namaBarang}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500 font-semibold">Jumlah:</span>
+                      <span className="text-rose-700 font-bold">{logToDelete.jumlah} pcs ({logToDelete.jenisAktivitas})</span>
+                    </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-500 font-semibold">Pemakai:</span>
+                      <span className="text-slate-800 font-bold">{logToDelete.pemakai} ({logToDelete.divisi})</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              <div className="text-[10px] text-slate-400">
+                * Menghapus log ini tidak akan mengubah kuantitas stok barang secara otomatis. Hanya riwayat pencatatan keluar-masuk ini saja yang akan dihapus dari sistem arsip database.
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setDeletingLogId(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer font-sans"
+                >
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onDeleteLog) onDeleteLog(deletingLogId);
+                    setDeletingLogId(null);
+                  }}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition hover:shadow-xs cursor-pointer font-sans"
+                >
+                  Hapus Permanen
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW/DETAIL LOG MODAL */}
+      {viewingLogId && logBeingViewed && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
+          onClick={() => setViewingLogId(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setViewingLogId(null)}
+              className="absolute top-4 right-4 p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer z-10"
+              title="Tutup"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center space-x-2 text-blue-600">
+                <Eye className="h-5 w-5" />
+                <h3 className="text-sm font-black text-blue-950 uppercase tracking-wide">Detail Riwayat Mutasi Barang</h3>
+              </div>
+
+              <div className="border border-slate-100 rounded-xl divide-y divide-slate-150 overflow-hidden text-xs">
+                <div className="grid grid-cols-3 p-3 bg-slate-50/50">
+                  <span className="text-slate-500 font-semibold">ID Transaksi / Log</span>
+                  <span className="col-span-2 font-bold text-slate-800">{logBeingViewed.id}</span>
+                </div>
+                <div className="grid grid-cols-3 p-3">
+                  <span className="text-slate-500 font-semibold">Tanggal Log</span>
+                  <span className="col-span-2 font-bold text-slate-800">{logBeingViewed.tanggal}</span>
+                </div>
+                <div className="grid grid-cols-3 p-3 bg-slate-50/50">
+                  <span className="text-slate-500 font-semibold">Jenis Mutasi</span>
+                  <span className="col-span-2 font-semibold text-[#11512f]">{logBeingViewed.jenisAktivitas}</span>
+                </div>
+                <div className="grid grid-cols-3 p-3">
+                  <span className="text-slate-500 font-semibold">Nama Barang (ID)</span>
+                  <span className="col-span-2 font-bold text-slate-800">{logBeingViewed.namaBarang} <span className="font-mono text-slate-400 text-[10px]">({logBeingViewed.idBarang})</span></span>
+                </div>
+                <div className="grid grid-cols-3 p-3 bg-slate-50/50">
+                  <span className="text-slate-500 font-semibold">Jumlah</span>
+                  <span className="col-span-2 font-bold text-emerald-800">{logBeingViewed.jumlah} pcs</span>
+                </div>
+                <div className="grid grid-cols-3 p-3">
+                  <span className="text-slate-500 font-semibold">Pemakai / Divisi</span>
+                  <span className="col-span-2 font-bold text-slate-800">{logBeingViewed.pemakai} <span className="text-slate-400 font-normal">({logBeingViewed.divisi})</span></span>
+                </div>
+                <div className="grid grid-cols-3 p-3 bg-slate-50/50">
+                  <span className="text-slate-500 font-semibold">Kondisi Keluar</span>
+                  <span className="col-span-2 font-semibold text-slate-800">{logBeingViewed.kondisiKeluar}</span>
+                </div>
+                <div className="grid grid-cols-3 p-3">
+                  <span className="text-slate-500 font-semibold">Status Pengembalian</span>
+                  <span className={`col-span-2 inline-block max-w-max px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                    logBeingViewed.statusPengembalian === 'Sudah Kembali'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : logBeingViewed.statusPengembalian === 'Tidak Kembali (Hilang)'
+                      ? 'bg-rose-50 text-rose-700'
+                      : 'bg-amber-50 text-amber-700'
+                  }`}>
+                    {logBeingViewed.statusPengembalian}
+                  </span>
+                </div>
+                {logBeingViewed.kondisiKembali && (
+                  <div className="grid grid-cols-3 p-3 bg-slate-50/50">
+                    <span className="text-slate-500 font-semibold">Kondisi Kembali</span>
+                    <span className="col-span-2 font-bold text-emerald-700">{logBeingViewed.kondisiKembali}</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-3 p-3">
+                  <span className="text-slate-500 font-semibold">PIC Gudang</span>
+                  <span className="col-span-2 font-bold text-slate-800">{logBeingViewed.pic}</span>
+                </div>
+                <div className="grid grid-cols-3 p-3 bg-slate-50/50">
+                  <span className="text-slate-500 font-semibold">Keterangan</span>
+                  <span className="col-span-2 text-slate-600 font-semibold leading-relaxed">{logBeingViewed.keterangan || <span className="text-slate-350 italic">- Tidak ada -</span>}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setViewingLogId(null)}
+                  className="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-lg transition cursor-pointer"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT LOG MODAL */}
+      {editingLog && (
+        <div 
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 overflow-y-auto animate-in fade-in zoom-in duration-200"
+          onClick={() => setEditingLog(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-lg w-full p-6 relative shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setEditingLog(null)}
+              className="absolute top-4 right-4 p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-slate-600 transition cursor-pointer z-10"
+              title="Tutup"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            
+            <form 
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (onEditLog) {
+                  onEditLog(editingLog);
+                }
+                setEditingLog(null);
+              }} 
+              className="space-y-4"
+            >
+              <h3 className="text-base font-bold text-slate-800 flex items-center space-x-2">
+                <Edit2 className="h-5 w-5 text-amber-600" />
+                <span>Edit Data Mutasi [{editingLog.id}]</span>
+              </h3>
+
+              <div className="grid grid-cols-1 gap-3.5 text-xs">
+                {/* Jenis Mutasi */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-550 uppercase mb-1">Jenis Mutasi *</label>
+                  <select
+                    value={editingLog.jenisAktivitas}
+                    onChange={(e) => setEditingLog({...editingLog, jenisAktivitas: e.target.value})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                  >
+                    <option value="Pemakaian Trip">Pemakaian Trip</option>
+                    <option value="Penyewaan Barang">Penyewaan Barang (Sewa)</option>
+                    <option value="Pemakaian Pribadi Internal">Pemakaian Pribadi / Internal</option>
+                    <option value="Dijual">Dijual (Keluar Permanen)</option>
+                    <option value="Reparasi">Reparasi (Perbaikan)</option>
+                    <option value="Perawatan">Perawatan (Laundry/Cuci)</option>
+                  </select>
+                </div>
+
+                {/* Nama Barang */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Barang</label>
+                  <input
+                    type="text"
+                    value={editingLog.namaBarang}
+                    onChange={(e) => setEditingLog({...editingLog, namaBarang: e.target.value})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                  />
+                </div>
+
+                {/* Jumlah & Kondisi Keluar */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Jumlah Mutasi (pcs) *</label>
+                    <input
+                      type="number"
+                      required
+                      min="1"
+                      value={editingLog.jumlah}
+                      onChange={(e) => setEditingLog({...editingLog, jumlah: Number(e.target.value)})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kondisi Keluar</label>
+                    <select
+                      value={editingLog.kondisiKeluar || 'Baik'}
+                      onChange={(e) => setEditingLog({...editingLog, kondisiKeluar: e.target.value as any})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    >
+                      <option value="Baru">Baru</option>
+                      <option value="Baik">Baik</option>
+                      <option value="Rusak Ringan">Rusak Ringan</option>
+                      <option value="Tidak Dapat Dipakai">Tidak Dapat Dipakai</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Pemakai & Divisi */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Nama Pemakai *</label>
+                    <input
+                      type="text"
+                      required
+                      value={editingLog.pemakai}
+                      onChange={(e) => setEditingLog({...editingLog, pemakai: e.target.value})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Divisi Pemakai</label>
+                    <select
+                      value={editingLog.divisi || 'Operasional Lapangan'}
+                      onChange={(e) => setEditingLog({...editingLog, divisi: e.target.value})}
+                      className="w-full px-3 py-2 bg-[#f8fafc] border border-slate-200 rounded-lg text-[11px] font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    >
+                      <option value="Operasional Lapangan">Operasional Lapangan</option>
+                      <option value="Logistik">Logistik &amp; Gudang</option>
+                      <option value="Pemandu Wisata">Pemandu / Guides</option>
+                      <option value="Pribadi / Internal">Pribadi Internal</option>
+                      <option value="Dokumentasi">Dokumentasi Crew</option>
+                      <option value="Medis / P3K">Medis Crew</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Alur Pengembalian */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Status Pengembalian</label>
+                    <select
+                      value={editingLog.statusPengembalian}
+                      onChange={(e) => setEditingLog({...editingLog, statusPengembalian: e.target.value as any})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    >
+                      <option value="Belum Kembali">Belum Kembali</option>
+                      <option value="Sudah Kembali">Sudah Kembali</option>
+                      <option value="Tidak Kembali (Hilang)">Tidak Kembali (Hilang)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kondisi Kembali</label>
+                    <select
+                      value={editingLog.kondisiKembali || ''}
+                      onChange={(e) => setEditingLog({...editingLog, kondisiKembali: e.target.value as any})}
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    >
+                      <option value="">- Belum Kembali -</option>
+                      <option value="Baru">Baru</option>
+                      <option value="Baik">Baik</option>
+                      <option value="Rusak Ringan">Rusak Ringan</option>
+                      <option value="Tidak Dapat Dipakai">Tidak Dapat Dipakai</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* PIC Gudang */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">PIC Gudang</label>
+                  <input
+                    type="text"
+                    required
+                    value={editingLog.pic}
+                    onChange={(e) => setEditingLog({...editingLog, pic: e.target.value})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                  />
+                </div>
+
+                {/* Keterangan */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Keterangan Tambahan</label>
+                  <textarea
+                    rows={2}
+                    value={editingLog.keterangan || ''}
+                    onChange={(e) => setEditingLog({...editingLog, keterangan: e.target.value})}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-hidden focus:border-amber-500 focus:bg-white transition"
+                    placeholder="Tulis detail tambahan..."
+                  />
+                </div>
+              </div>
+
+              {/* Action */}
+              <div className="flex justify-end space-x-2 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditingLog(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-lg transition cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg transition shadow-sm cursor-pointer"
+                >
+                  Simpan Perubahan
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
